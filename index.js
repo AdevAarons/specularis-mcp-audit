@@ -18,7 +18,7 @@ const fetchWithTimeout = async (url, opts = {}, ms = 6000) => {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
-    const res = await fetch(url, { ...opts, signal: ctrl.signal, headers: { "User-Agent": "Mozilla/5.0 (compatible; SpecularisAuditBot/1.0)", ...(opts.headers || {}) } });
+    const res = await fetch(url, { ...opts, signal: ctrl.signal, headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", ...(opts.headers || {}) } });
     const text = await res.text().catch(() => "");
     return { ok: res.ok, status: res.status, text };
   } catch (e) {
@@ -67,7 +67,7 @@ const quickSnapshot = async (site) => {
 };
 
 const triggerFullAudit = async (payload) => {
-  const r = await fetchWithTimeout(N8N_WEBHOOK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }, 12000);
+  const r = await fetchWithTimeout(N8N_WEBHOOK_URL, { method: "POST", headers: { "Content-Type": "application/json", "x-audit-source": "specularis-mcp" }, body: JSON.stringify(payload) }, 12000);
   return r.ok;
 };
 
