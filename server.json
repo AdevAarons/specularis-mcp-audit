@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.adevaarons/specularis-mcp-audit",
+  "title": "Specularis AI Visibility Audit",
+  "description": "Run a free AI visibility (GEO/AEO) audit on any website from inside Claude/ChatGPT — checks whether ChatGPT, Claude & Perplexity can find and cite it, with an instant snapshot and an optional full scored PDF report.",
+  "websiteUrl": "https://specularisinc.com/free-audit",
+  "repository": {
+    "url": "https://github.com/AdevAarons/specularis-mcp-audit",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://specularis-mcp-audit-production.up.railway.app/mcp"
+    }
+  ]
+}
