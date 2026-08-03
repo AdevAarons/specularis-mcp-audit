@@ -20,6 +20,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // on the Specularis site (Framer's HTML embed can't sandbox a full document).
 let SAMPLE_REPORT_HTML = "";
 try { SAMPLE_REPORT_HTML = readFileSync(join(__dirname, "public", "sample-report.html"), "utf8"); } catch (e) {}
+let HERO_PREVIEW_HTML = "";
+try { HERO_PREVIEW_HTML = readFileSync(join(__dirname, "public", "hero-preview.html"), "utf8"); } catch (e) {}
 
 // ---- config (set these as env vars on the host; safe defaults below) ----
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || "https://primary-production-4d44.up.railway.app/webhook/free-audit";
@@ -207,6 +209,12 @@ app.get("/", (_req, res) => res.json({ name: "specularis-ai-visibility-audit", s
 app.get("/sample-report", (_req, res) => {
   if (!SAMPLE_REPORT_HTML) return res.status(404).send("Not found");
   res.type("html").send(SAMPLE_REPORT_HTML);
+});
+
+// Design reference for the homepage redesign (not linked publicly; visual spec only)
+app.get("/hero-preview", (_req, res) => {
+  if (!HERO_PREVIEW_HTML) return res.status(404).send("Not found");
+  res.type("html").send(HERO_PREVIEW_HTML);
 });
 
 app.post("/mcp", async (req, res) => {

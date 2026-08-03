@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Specularis — homepage hero + counters mock</title>
+<style>
+  :root{ --indigo:#6B4EFF; --indigo-soft:#efeaff; --ink:#15151f; --muted:#6b6b76; --line:#ececf4; --bg:#ffffff; --wash:#faf9ff; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--bg); color:var(--ink);
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.5; }
+  .container{ max-width:1080px; margin:0 auto; padding:0 24px; }
+
+  /* nav */
+  nav{ display:flex; align-items:center; justify-content:space-between; padding:22px 0; }
+  .logo{ font-weight:800; letter-spacing:.16em; color:var(--indigo); font-size:17px; }
+  .navlinks{ display:flex; gap:28px; align-items:center; }
+  .navlinks a{ color:var(--muted); text-decoration:none; font-size:14.5px; font-weight:500; }
+  .navlinks a:hover{ color:var(--ink); }
+  .btn{ background:var(--indigo); color:#fff; text-decoration:none; font-weight:700; font-size:14.5px;
+    padding:11px 20px; border-radius:9px; display:inline-block; transition:transform .12s ease; }
+  .btn:hover{ transform:translateY(-1px); }
+  .btn.ghost{ background:transparent; color:var(--indigo); box-shadow:inset 0 0 0 1.5px var(--indigo); }
+  @media(max-width:720px){ .navlinks{ display:none; } }
+
+  /* hero */
+  .hero{ text-align:center; padding:64px 0 44px; }
+  .eyebrow{ display:inline-block; background:var(--indigo-soft); color:var(--indigo); font-weight:700;
+    font-size:13px; letter-spacing:.02em; padding:7px 15px; border-radius:20px; margin-bottom:22px; }
+  h1{ font-size:clamp(34px,6vw,58px); line-height:1.05; letter-spacing:-.025em; font-weight:800; max-width:16ch; margin:0 auto; }
+  h1 .accent{ color:var(--indigo); }
+  .sub{ font-size:clamp(16px,2.2vw,20px); color:var(--muted); max-width:60ch; margin:22px auto 0; }
+  .cta-row{ display:flex; gap:14px; justify-content:center; margin-top:32px; flex-wrap:wrap; }
+  .btn.lg{ padding:15px 28px; font-size:16px; border-radius:11px; }
+  .microcopy{ color:var(--muted); font-size:13.5px; margin-top:16px; }
+
+  /* counter bar */
+  .counters{ background:var(--wash); border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin-top:44px; }
+  .counters .grid{ display:grid; grid-template-columns:repeat(3,1fr); }
+  .stat{ text-align:center; padding:40px 20px; border-right:1px solid var(--line); }
+  .stat:last-child{ border-right:0; }
+  .stat .num{ font-size:clamp(36px,5vw,52px); font-weight:800; color:var(--indigo); line-height:1; letter-spacing:-.02em; }
+  .stat .lbl{ color:var(--muted); font-size:14.5px; margin-top:10px; max-width:24ch; margin-left:auto; margin-right:auto; }
+  .stat .src{ color:#a6a6b4; font-size:11.5px; margin-top:7px; text-transform:uppercase; letter-spacing:.06em; }
+  @media(max-width:720px){ .counters .grid{ grid-template-columns:1fr; }
+    .stat{ border-right:0; border-bottom:1px solid var(--line); } .stat:last-child{ border-bottom:0; } }
+
+  .note{ max-width:1080px; margin:26px auto 60px; padding:0 24px; color:#a6a6b4; font-size:12.5px; text-align:center; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <div class="logo">SPECULARIS</div>
+      <div class="navlinks">
+        <a href="#">Why us</a>
+        <a href="#">How it works</a>
+        <a href="#">Case studies</a>
+        <a href="#">Free audit</a>
+      </div>
+      <a href="#" class="btn">Run free audit</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    <section class="hero">
+      <span class="eyebrow">AI is the new search. Most businesses are invisible to it.</span>
+      <h1>Become the business <span class="accent">AI recommends.</span></h1>
+      <p class="sub">ChatGPT, Claude, and Perplexity decide who gets named when someone asks for a business like yours. We make sure they can find you, trust you, and cite you — starting with a free audit that shows exactly where you stand today.</p>
+      <div class="cta-row">
+        <a href="#" class="btn lg">Run your free audit</a>
+        <a href="#" class="btn lg ghost">See how it works</a>
+      </div>
+      <div class="microcopy">2 minutes · scored report in your inbox · no card, no call required</div>
+    </section>
+  </div>
+
+  <div class="counters">
+    <div class="container">
+      <div class="grid">
+        <div class="stat">
+          <div class="num" data-to="14" data-suffix="">0</div>
+          <div class="lbl">Websites we stress-tested to calibrate the audit</div>
+          <div class="src">Specularis calibration study</div>
+        </div>
+        <div class="stat">
+          <div class="num" data-to="8" data-suffix=" / 12">0</div>
+          <div class="lbl">were blocking AI crawlers without knowing it</div>
+          <div class="src">including 3 that AI still recommends</div>
+        </div>
+        <div class="stat">
+          <div class="num" data-to="20" data-suffix="-pt">0</div>
+          <div class="lbl">gap between businesses AI recommends and ones it ignores</div>
+          <div class="src">64.5 vs 44.7 average score</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">Every number above is from our own calibration study — real sites, measured the same way your audit measures yours. Nothing here is a placeholder.</div>
+
+<script>
+  // count-up animation on load (the "detail" from the reference site)
+  function animate(el){
+    var to = parseFloat(el.getAttribute('data-to')), suf = el.getAttribute('data-suffix') || '';
+    var dur = 1100, start = null;
+    function step(ts){
+      if(!start) start = ts;
+      var p = Math.min((ts - start)/dur, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(to * eased) + suf;
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting){ animate(e.target); io.unobserve(e.target); } });
+  }, {threshold:.4});
+  document.querySelectorAll('.num').forEach(function(n){ io.observe(n); });
+</script>
+</body>
+</html>
