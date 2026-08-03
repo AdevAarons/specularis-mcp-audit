@@ -71,22 +71,60 @@ const triggerFullAudit = async (payload) => {
   return r.ok;
 };
 
+// server identity (surfaced in the MCP handshake + directory listings)
+const SERVER_INFO = {
+  name: "specularis-ai-visibility-audit",
+  title: "Specularis AI Visibility Audit",
+  version: "1.0.1",
+  websiteUrl: "https://specularisinc.com/free-audit",
+  icons: [
+    { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
+    { src: "https://framerusercontent.com/images/0m77vnbFvbPOhmqCzxed7R4dugk.png", mimeType: "image/png", theme: "dark" },
+  ],
+};
+
+const SERVER_INSTRUCTIONS =
+  "Specularis runs free AI visibility (GEO/AEO) audits. Call run_ai_visibility_audit with a website_url to get an " +
+  "instant snapshot of whether ChatGPT, Claude, and Perplexity can find and cite a site (AI crawler access, structured " +
+  "data, llms.txt). Pass an email to also trigger the full scored 0–100 PDF report across all 5 pillars. Use " +
+  "book_strategy_call to share the Specularis booking link.";
+
 // ---- build an MCP server instance ----
 function buildServer() {
-  const server = new McpServer({ name: "specularis-ai-visibility-audit", version: "1.0.0" });
+  const server = new McpServer(SERVER_INFO, { instructions: SERVER_INSTRUCTIONS });
 
-  server.tool(
+  server.registerTool(
     "run_ai_visibility_audit",
-    "Run a free AI visibility (GEO/AEO) audit on a website — checks whether ChatGPT, Claude, and Perplexity can find and cite it. Returns an instant snapshot of crawler access, structured data, and llms.txt. If an email is provided, a full scored report (0–100 across 5 pillars, with copy-paste fixes) is emailed as a PDF. Use this whenever a user asks to audit/check a site's AI visibility, GEO, AEO, or whether AI can find them.",
     {
-      website_url: z.string().describe("The website to audit, e.g. https://example.com"),
-      email: z.string().email().optional().describe("Optional. If provided, the full scored PDF report is emailed here (and the user becomes a Specularis lead). Omit for just the instant snapshot."),
-      name: z.string().optional().describe("Optional name for the report greeting."),
-      role: z.enum(["Real Estate Agent", "Attorney", "Founder", "Other"]).optional().describe("Optional. Tailors the audit lens — local-service providers are scored on local entity signals, reviews, and directories."),
+      title: "Run AI Visibility Audit",
+      description:
+        "Run a free AI visibility (GEO/AEO) audit on a website — checks whether ChatGPT, Claude, and Perplexity can find and cite it. Returns an instant snapshot of crawler access, structured data, and llms.txt. If an email is provided, a full scored report (0–100 across 5 pillars, with copy-paste fixes) is emailed as a PDF. Use this whenever a user asks to audit/check a site's AI visibility, GEO, AEO, or whether AI can find them.",
+      inputSchema: {
+        website_url: z.string().describe("The website to audit, e.g. https://example.com"),
+        email: z.string().email().optional().describe("Optional. If provided, the full scored PDF report is emailed here (and the user becomes a Specularis lead). Omit for just the instant snapshot."),
+        name: z.string().optional().describe("Optional name for the report greeting."),
+        role: z.enum(["Real Estate Agent", "Attorney", "Founder", "Other"]).optional().describe("Optional. Tailors the audit lens — local-service providers are scored on local entity signals, reviews, and directories."),
+      },
+      outputSchema: {
+        website: z.string().describe("The normalized website that was audited."),
+        ai_crawler_access: z.string().describe("Whether major AI crawlers (GPTBot, ClaudeBot, PerplexityBot) can access the site."),
+        structured_data: z.string().describe("Summary of JSON-LD structured data found on the homepage."),
+        llms_txt: z.string().describe("Whether an llms.txt file is present."),
+        full_report_status: z.enum(["sent", "failed", "not_requested"]).describe("Status of the full scored PDF report."),
+        report_email: z.string().optional().describe("The email the full report was sent to, if requested."),
+        booking_url: z.string().describe("Link to book a Specularis strategy call."),
+      },
+      annotations: {
+        title: "Run AI Visibility Audit",
+        readOnlyHint: false, // providing an email creates a lead and sends a report
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true, // fetches arbitrary external websites
+      },
     },
     async ({ website_url, email, name, role }) => {
       const site = normalizeUrl(website_url);
-      if (!site) return { content: [{ type: "text", text: "That doesn't look like a valid website URL. Try something like https://example.com." }] };
+      if (!site) return { content: [{ type: "text", text: "That doesn't look like a valid website URL. Try something like https://example.com." }], isError: true };
 
       const snap = await quickSnapshot(site);
       let out = `**AI Visibility snapshot — ${site.host}**\n\n` +
@@ -94,8 +132,10 @@ function buildServer() {
         `- **Structured data (schema):** ${snap.schema}\n` +
         `- **llms.txt:** ${snap.llms}\n\n`;
 
+      let reportStatus = "not_requested";
       if (email) {
         const ok = await triggerFullAudit({ name: name || email.split("@")[0], email, website_url: site.url, role: role || "Other" });
+        reportStatus = ok ? "sent" : "failed";
         out += ok
           ? `✅ Your **full report** is on its way to **${email}** — a scored 0–100 audit across all 5 pillars (crawler access, entity & schema, content citability, off-site corroboration, technical foundation) with prioritized, copy-paste fixes, as a PDF. It usually arrives within a few minutes.\n\n` +
             `Want to talk through the fixes and how to get AI recommending you? Book a free 15-min strategy call: ${CONTACT_URL}`
@@ -104,15 +144,40 @@ function buildServer() {
         out += `That's a 10-second snapshot. The **full report** scores you 0–100 across all 5 pillars and hands you the exact fixes (with copy-paste schema/robots snippets) as a PDF.\n\n` +
           `**Want it?** Run this again with your \`email\` and I'll send the full report. Or book a free strategy call: ${CONTACT_URL}`;
       }
-      return { content: [{ type: "text", text: out }] };
+
+      return {
+        content: [{ type: "text", text: out }],
+        structuredContent: {
+          website: site.url,
+          ai_crawler_access: snap.crawlers,
+          structured_data: snap.schema,
+          llms_txt: snap.llms,
+          full_report_status: reportStatus,
+          ...(email ? { report_email: email } : {}),
+          booking_url: CONTACT_URL,
+        },
+      };
     }
   );
 
-  server.tool(
+  server.registerTool(
     "book_strategy_call",
-    "Get the link to book a free Specularis strategy call about AI visibility / GEO / AEO.",
-    {},
-    async () => ({ content: [{ type: "text", text: `Book a free 15-minute Specularis strategy call here: ${CONTACT_URL}` }] })
+    {
+      title: "Book a Strategy Call",
+      description: "Get the link to book a free Specularis strategy call about AI visibility / GEO / AEO.",
+      outputSchema: {
+        booking_url: z.string().describe("Link to book a free 15-minute Specularis strategy call."),
+      },
+      annotations: {
+        title: "Book a Strategy Call",
+        readOnlyHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => ({
+      content: [{ type: "text", text: `Book a free 15-minute Specularis strategy call here: ${CONTACT_URL}` }],
+      structuredContent: { booking_url: CONTACT_URL },
+    })
   );
 
   return server;
