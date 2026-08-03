@@ -3,6 +3,9 @@
 // Reuses the existing n8n audit webhook as the backend engine.
 
 import { webcrypto } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import express from "express";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -11,6 +14,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 // SDK 1.30 relies on the Web Crypto global (crypto.randomUUID); Node 18 on Railway
 // doesn't expose it globally. Set it before any request is handled.
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// Static marketing asset: the public sample audit report, served for iframe embedding
+// on the Specularis site (Framer's HTML embed can't sandbox a full document).
+let SAMPLE_REPORT_HTML = "";
+try { SAMPLE_REPORT_HTML = readFileSync(join(__dirname, "public", "sample-report.html"), "utf8"); } catch (e) {}
 
 // ---- config (set these as env vars on the host; safe defaults below) ----
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || "https://primary-production-4d44.up.railway.app/webhook/free-audit";
@@ -193,6 +202,12 @@ const app = express();
 app.use(express.json());
 
 app.get("/", (_req, res) => res.json({ name: "specularis-ai-visibility-audit", status: "ok", mcp: "/mcp" }));
+
+// Public sample audit report (embedded by URL on specularisinc.com/sample-report)
+app.get("/sample-report", (_req, res) => {
+  if (!SAMPLE_REPORT_HTML) return res.status(404).send("Not found");
+  res.type("html").send(SAMPLE_REPORT_HTML);
+});
 
 app.post("/mcp", async (req, res) => {
   const server = buildServer();
