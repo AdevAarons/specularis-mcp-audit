@@ -2,10 +2,15 @@
 // Exposes the free GEO/AEO audit as a tool inside Claude / ChatGPT / any MCP client.
 // Reuses the existing n8n audit webhook as the backend engine.
 
+import { webcrypto } from "node:crypto";
 import express from "express";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+
+// SDK 1.30 relies on the Web Crypto global (crypto.randomUUID); Node 18 on Railway
+// doesn't expose it globally. Set it before any request is handled.
+if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
 // ---- config (set these as env vars on the host; safe defaults below) ----
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || "https://primary-production-4d44.up.railway.app/webhook/free-audit";
