@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Specularis — animated stats</title>
+<style>
+  :root{ --blue:#2467E3; --ink:#161616; --muted:#6b6b76; --line:#e6e9f0; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:transparent; color:var(--ink); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; padding:12px 16px; }
+  .grid{ max-width:960px; margin:0 auto; display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+  @media(max-width:680px){ .grid{ grid-template-columns:1fr; gap:8px; } }
+  .stat{ text-align:center; padding:26px 18px; }
+  .num{ font-size:clamp(44px,6vw,60px); font-weight:800; color:var(--blue); line-height:1; letter-spacing:-.02em; }
+  .lbl{ color:var(--muted); font-size:15px; margin:12px auto 0; max-width:26ch; line-height:1.45; }
+  .src{ color:#a6a6b4; font-size:11.5px; margin-top:8px; text-transform:uppercase; letter-spacing:.06em; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="stat">
+      <div class="num" data-to="14">0</div>
+      <div class="lbl">Websites we stress-tested to calibrate the audit</div>
+      <div class="src">Specularis calibration study</div>
+    </div>
+    <div class="stat">
+      <div class="num" data-to="67" data-suffix="%">0</div>
+      <div class="lbl">were blocking AI crawlers without knowing it</div>
+      <div class="src">8 of 12 · incl. 3 AI still recommends</div>
+    </div>
+    <div class="stat">
+      <div class="num" data-to="20" data-suffix="-pt">0</div>
+      <div class="lbl">gap between businesses AI recommends and ones it ignores</div>
+      <div class="src">64.5 vs 44.7 average score</div>
+    </div>
+  </div>
+
+<script>
+  function countUp(el){
+    if(el.dataset.done) return; el.dataset.done = 1;
+    var to = parseFloat(el.getAttribute('data-to')), suf = el.getAttribute('data-suffix') || '';
+    var start = null, dur = 1400;
+    function step(ts){
+      if(!start) start = ts;
+      var p = Math.min((ts - start)/dur, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(to * eased) + suf;
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting){ countUp(e.target); io.unobserve(e.target); } });
+  }, {threshold:.4});
+  document.querySelectorAll('.num').forEach(function(n){ io.observe(n); });
+</script>
+</body>
+</html>

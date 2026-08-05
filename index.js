@@ -24,6 +24,8 @@ let HERO_PREVIEW_HTML = "";
 try { HERO_PREVIEW_HTML = readFileSync(join(__dirname, "public", "hero-preview.html"), "utf8"); } catch (e) {}
 let ADDONS_SWITCHER_HTML = "";
 try { ADDONS_SWITCHER_HTML = readFileSync(join(__dirname, "public", "addons-switcher.html"), "utf8"); } catch (e) {}
+let STATS_BAR_HTML = "";
+try { STATS_BAR_HTML = readFileSync(join(__dirname, "public", "stats-bar.html"), "utf8"); } catch (e) {}
 // Brand assets (served for schema logo/image + og); binary buffers loaded once
 let LOGO_PNG = null, HEADSHOT_PNG = null;
 try { LOGO_PNG = readFileSync(join(__dirname, "public", "assets", "specularis-logo.png")); } catch (e) {}
@@ -227,6 +229,12 @@ app.get("/hero-preview", (_req, res) => {
 app.get("/addons-switcher", (_req, res) => {
   if (!ADDONS_SWITCHER_HTML) return res.status(404).send("Not found");
   res.type("html").send(ADDONS_SWITCHER_HTML);
+});
+
+// Animated stats bar — count-up numbers on scroll-in (embedded by URL)
+app.get("/stats-bar", (_req, res) => {
+  if (!STATS_BAR_HTML) return res.status(404).send("Not found");
+  res.type("html").send(STATS_BAR_HTML);
 });
 
 // Brand assets (used as schema logo/image URLs)
