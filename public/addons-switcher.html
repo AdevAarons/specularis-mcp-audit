@@ -5,34 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Specularis — add-ons</title>
 <style>
-  :root{ --blue:#2467E3; --blue-lt:#1A6DFF; --ink:#161616; --muted:#6b6b76; --line:#ececf4; --card:#ffffff; --tickbg:#e9f0ff; }
+  :root{ --blue:#2467E3; --blue-lt:#1A6DFF; --ink:#161616; --muted:#6b6b76; --card:#F5F5F5; }
   *{ box-sizing:border-box; margin:0; padding:0; }
-  body{ background:transparent; color:var(--ink); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.5; padding:8px 16px 24px; }
-  .wrap{ max-width:720px; margin:0 auto; }
-
-  .lead{ text-align:center; color:var(--muted); margin:0 auto 24px; max-width:44ch; font-size:16px; }
+  body{ background:transparent; color:var(--ink); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.5; padding:6px 16px 20px; }
+  .wrap{ max-width:760px; margin:0 auto; }
 
   /* pill / swatch bar */
   .tabs{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:0 auto 22px; }
-  .tab{ border:0; background:#f0f2f7; color:#5b6270; font:inherit; font-size:14px; font-weight:700; padding:10px 18px; border-radius:30px; cursor:pointer; white-space:nowrap; transition:background .18s ease, color .18s ease; }
-  .tab:hover{ color:var(--ink); background:#e6e9f0; }
+  .tab{ border:0; background:#eceef3; color:#5b6270; font:inherit; font-size:14px; font-weight:700; padding:10px 18px; border-radius:30px; cursor:pointer; white-space:nowrap; transition:background .18s ease, color .18s ease; }
+  .tab:hover{ color:var(--ink); background:#e2e5ec; }
   .tab.active{ background:var(--blue); color:#fff; }
 
-  /* the plan-style card */
+  /* plan-style card (matches the pricing cards) */
   .panel{ display:none; }
-  .panel.show{ display:block; animation:fade .3s ease; }
-  @keyframes fade{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
-  .card{ background:var(--card); border:1px solid var(--line); border-radius:20px; padding:34px 34px 32px; box-shadow:0 12px 40px rgba(20,20,40,.06); }
-  @media(max-width:520px){ .card{ padding:26px 22px; } }
+  .panel.show{ display:block; }
+  .card{ background:var(--card); border-radius:20px; padding:40px 40px 36px; }
+  @media(max-width:520px){ .card{ padding:28px 24px; } }
 
-  .ptitle{ font-size:22px; font-weight:800; letter-spacing:-.01em; }
-  .pprice{ font-size:32px; font-weight:800; letter-spacing:-.02em; margin:6px 0 22px; }
-  .pprice .u{ font-size:16px; color:var(--muted); font-weight:700; }
+  .ptitle{ font-size:22px; font-weight:600; color:var(--ink); }
+  .pprice{ font-size:32px; font-weight:800; letter-spacing:-.02em; color:var(--ink); margin:4px 0 2px; }
+  .pprice .u{ font-size:18px; font-weight:800; }
   .pprice.free{ color:#1e7d45; }
+  .psub{ color:var(--muted); font-size:14.5px; margin:8px 0 24px; }
 
-  .checks{ list-style:none; display:grid; gap:13px; margin:0 0 26px; }
-  .checks li{ position:relative; padding-left:32px; font-size:15px; color:#2c2c34; }
-  .checks .tick{ position:absolute; left:0; top:0; width:22px; height:22px; border-radius:50%; background:var(--tickbg); color:var(--blue); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; }
+  .checks{ list-style:none; display:grid; gap:15px; margin:0 0 28px; }
+  .checks li{ position:relative; padding-left:30px; font-size:15.5px; color:#2c2c34; }
+  .checks .tick{ position:absolute; left:0; top:1px; color:var(--blue); font-size:15px; font-weight:800; }
 
   .btn{ display:inline-block; background:var(--blue); color:#fff; text-decoration:none; font-weight:700; font-size:15px; padding:13px 24px; border-radius:30px; transition:transform .14s ease, box-shadow .14s ease, background .14s ease; }
   .btn:hover{ transform:translateY(-2px); box-shadow:0 10px 24px rgba(36,103,227,.3); background:var(--blue-lt); }
@@ -40,8 +38,6 @@
 </head>
 <body>
 <div class="wrap">
-  <p class="lead">Stack onto either plan. Click an add-on to see what's inside.</p>
-
   <div class="tabs" role="tablist">
     <button class="tab active" data-panel="p0">Earned Media &amp; Listicles</button>
     <button class="tab" data-panel="p1">Backlink Building</button>
@@ -55,6 +51,7 @@
     <div class="card">
       <div class="ptitle">Earned Media &amp; Listicles</div>
       <div class="pprice">$2,000<span class="u"> USD/mo</span></div>
+      <div class="psub">Get named in the roundups and press AI actually reads.</div>
       <ul class="checks">
         <li><span class="tick">✓</span>Into the "best-of" roundups AI reads when it recommends a business like yours</li>
         <li><span class="tick">✓</span>Roundup pages you own, built to rank and get cited</li>
@@ -71,6 +68,7 @@
     <div class="card">
       <div class="ptitle">Backlink Building — off-site authority</div>
       <div class="pprice">$1,500<span class="u"> USD/mo</span></div>
+      <div class="psub">Off-site authority AI trusts, built legitimately.</div>
       <ul class="checks">
         <li><span class="tick">✓</span>Legitimate editorial backlinks and mentions — no PBNs, no link farms</li>
         <li><span class="tick">✓</span>The off-site signals AI engines weigh when deciding who to cite</li>
@@ -85,6 +83,7 @@
     <div class="card">
       <div class="ptitle">AI Content &amp; SEO Strategy</div>
       <div class="pprice">$3,000<span class="u"> USD</span></div>
+      <div class="psub">The pages AI lifts into answers, mapped and built.</div>
       <ul class="checks">
         <li><span class="tick">✓</span>An answer-first content plan mapped to the questions buyers ask AI</li>
         <li><span class="tick">✓</span>The comparison, FAQ, and definition pages AI lifts into answers</li>
@@ -99,6 +98,7 @@
     <div class="card">
       <div class="ptitle">Website Design / Optimization</div>
       <div class="pprice">$1,500<span class="u"> USD</span></div>
+      <div class="psub">A site built for humans and AI engines to read.</div>
       <ul class="checks">
         <li><span class="tick">✓</span>Fast, crawlable site structure that both humans and AI can read</li>
         <li><span class="tick">✓</span>Clean schema, entity clarity, and prerender-safe markup</li>
@@ -113,6 +113,7 @@
     <div class="card">
       <div class="ptitle">AI Visibility Audit</div>
       <div class="pprice free">Free</div>
+      <div class="psub">See exactly where AI stands on your business today.</div>
       <ul class="checks">
         <li><span class="tick">✓</span>See where AI stands on your business today, scored 0–100</li>
         <li><span class="tick">✓</span>Crawler access, schema, citations, and copy-paste fixes</li>
