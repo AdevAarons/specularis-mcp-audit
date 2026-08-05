@@ -3,118 +3,124 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Specularis — add-ons tab switcher mock</title>
+<title>Specularis — add-ons</title>
 <style>
-  :root{ --blue:#2467E3; --blue-lt:#1A6DFF; --blue-soft:#e9f0ff; --ink:#161616; --muted:#6b6b76; --line:#ececf4; --wash:#f7f9fc; }
+  :root{ --blue:#2467E3; --blue-lt:#1A6DFF; --ink:#161616; --muted:#6b6b76; --line:#ececf4; --card:#ffffff; --tickbg:#e9f0ff; }
   *{ box-sizing:border-box; margin:0; padding:0; }
-  body{ background:#fff; color:var(--ink); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.5; padding:48px 20px; }
-  .wrap{ max-width:940px; margin:0 auto; }
+  body{ background:transparent; color:var(--ink); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.5; padding:8px 16px 24px; }
+  .wrap{ max-width:720px; margin:0 auto; }
 
-  .pill-kicker{ display:block; width:max-content; margin:0 auto 16px; background:var(--blue); color:#fff; font-size:13px; font-weight:800; padding:6px 16px; border-radius:20px; }
-  h2{ text-align:center; font-size:clamp(28px,4vw,40px); font-weight:800; letter-spacing:-.02em; }
-  .lead{ text-align:center; color:var(--muted); margin:12px auto 34px; max-width:52ch; font-size:17px; }
+  .lead{ text-align:center; color:var(--muted); margin:0 auto 24px; max-width:44ch; font-size:16px; }
 
-  /* the switcher (swatch) bar */
-  .tabs{ display:flex; gap:8px; background:transparent; padding:0; width:max-content; max-width:100%; margin:0 auto 30px; flex-wrap:wrap; justify-content:center; }
-  .tab{ border:0; background:#f0f2f7; color:#5b6270; font:inherit; font-size:14.5px; font-weight:700; padding:11px 20px; border-radius:30px; cursor:pointer; white-space:nowrap; transition:background .18s ease, color .18s ease; }
-  .tab:hover{ color:#161616; background:#e6e9f0; }
+  /* pill / swatch bar */
+  .tabs{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:0 auto 22px; }
+  .tab{ border:0; background:#f0f2f7; color:#5b6270; font:inherit; font-size:14px; font-weight:700; padding:10px 18px; border-radius:30px; cursor:pointer; white-space:nowrap; transition:background .18s ease, color .18s ease; }
+  .tab:hover{ color:var(--ink); background:#e6e9f0; }
   .tab.active{ background:var(--blue); color:#fff; }
 
-  /* the swapping panel */
-  .panel-shell{ border:1px solid var(--line); border-radius:22px; padding:38px 34px 34px; box-shadow:0 14px 44px rgba(20,20,40,.06); }
+  /* the plan-style card */
   .panel{ display:none; }
-  .panel.show{ display:block; animation:fade .35s ease; }
+  .panel.show{ display:block; animation:fade .3s ease; }
   @keyframes fade{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
-  .panel .ptitle{ text-align:center; font-size:26px; font-weight:800; letter-spacing:-.01em; }
-  .panel .pprice{ text-align:center; color:var(--blue); font-weight:800; font-size:18px; margin:6px 0 26px; }
-  .panel .pprice.free{ color:#1e7d45; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:20px; padding:34px 34px 32px; box-shadow:0 12px 40px rgba(20,20,40,.06); }
+  @media(max-width:520px){ .card{ padding:26px 22px; } }
 
-  .feats{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
-  @media(max-width:720px){ .feats{ grid-template-columns:1fr; } .tab{ padding:10px 15px; font-size:13.5px; } }
-  .feat{ background:var(--wash); border-radius:14px; padding:20px 18px; text-align:center; }
-  .feat .tick{ width:26px; height:26px; border-radius:50%; background:var(--blue); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; margin:0 auto 12px; }
-  .feat p{ color:var(--muted); font-size:14px; }
+  .ptitle{ font-size:22px; font-weight:800; letter-spacing:-.01em; }
+  .pprice{ font-size:32px; font-weight:800; letter-spacing:-.02em; margin:6px 0 22px; }
+  .pprice .u{ font-size:16px; color:var(--muted); font-weight:700; }
+  .pprice.free{ color:#1e7d45; }
 
-  .panel .cta-row{ text-align:center; margin-top:28px; }
-  .btn{ display:inline-block; background:var(--blue); color:#fff; text-decoration:none; font-weight:700; font-size:15px; padding:14px 26px; border-radius:30px; transition:transform .14s ease, box-shadow .14s ease, background .14s ease; }
-  .btn:hover{ transform:translateY(-2px); box-shadow:0 10px 26px rgba(36,103,227,.32); background:var(--blue-lt); }
+  .checks{ list-style:none; display:grid; gap:13px; margin:0 0 26px; }
+  .checks li{ position:relative; padding-left:32px; font-size:15px; color:#2c2c34; }
+  .checks .tick{ position:absolute; left:0; top:0; width:22px; height:22px; border-radius:50%; background:var(--tickbg); color:var(--blue); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; }
 
-  .demo-tag{ text-align:center; color:#a6a6b4; font-size:12.5px; margin-top:22px; }
+  .btn{ display:inline-block; background:var(--blue); color:#fff; text-decoration:none; font-weight:700; font-size:15px; padding:13px 24px; border-radius:30px; transition:transform .14s ease, box-shadow .14s ease, background .14s ease; }
+  .btn:hover{ transform:translateY(-2px); box-shadow:0 10px 24px rgba(36,103,227,.3); background:var(--blue-lt); }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <span class="pill-kicker">Add-Ons</span>
-  <h2>Stack onto either plan.</h2>
-  <p class="lead">Extra firepower when you need it. Click any add-on to see what's inside.</p>
+  <p class="lead">Stack onto either plan. Click an add-on to see what's inside.</p>
 
-  <!-- the swatch bar -->
   <div class="tabs" role="tablist">
-    <button class="tab active" data-panel="p4">Earned Media &amp; Listicles</button>
-    <button class="tab" data-panel="p0">Backlink Building</button>
-    <button class="tab" data-panel="p1">AI Content &amp; SEO Strategy</button>
-    <button class="tab" data-panel="p2">Website Design</button>
-    <button class="tab" data-panel="p3">Free AI Audit</button>
+    <button class="tab active" data-panel="p0">Earned Media &amp; Listicles</button>
+    <button class="tab" data-panel="p1">Backlink Building</button>
+    <button class="tab" data-panel="p2">AI Content &amp; SEO Strategy</button>
+    <button class="tab" data-panel="p3">Website Design</button>
+    <button class="tab" data-panel="p4">Free AI Audit</button>
   </div>
 
-  <div class="panel-shell">
-    <!-- Earned Media & Listicles (flagship) -->
-    <div class="panel show" id="p4">
+  <!-- Earned Media & Listicles -->
+  <div class="panel show" id="p0">
+    <div class="card">
       <div class="ptitle">Earned Media &amp; Listicles</div>
-      <div class="pprice">$2,000 USD/mo</div>
-      <div class="feats">
-        <div class="feat"><div class="tick">✓</div><p>Get into the "best-of" roundups AI reads when it recommends a business like yours — and build roundup pages you own.</p></div>
-        <div class="feat"><div class="tick">✓</div><p>Earned press quotes in real outlets through journalist sourcing, not paid wire — the citations AI weighs most.</p></div>
-        <div class="feat"><div class="tick">✓</div><p>We reclaim every unlinked mention you've already earned. Editorial only — no link rings, no spam.</p></div>
-      </div>
-      <div class="cta-row"><a href="#" class="btn">Book a Strategy Call →</a></div>
+      <div class="pprice">$2,000<span class="u"> USD/mo</span></div>
+      <ul class="checks">
+        <li><span class="tick">✓</span>Into the "best-of" roundups AI reads when it recommends a business like yours</li>
+        <li><span class="tick">✓</span>Roundup pages you own, built to rank and get cited</li>
+        <li><span class="tick">✓</span>Earned press quotes in real outlets — journalist sourcing, not paid wire</li>
+        <li><span class="tick">✓</span>Every unlinked mention you've already earned, reclaimed</li>
+        <li><span class="tick">✓</span>Legitimate and editorial only — no link rings, no spam</li>
+      </ul>
+      <a href="#" class="btn">Book a Strategy Call →</a>
     </div>
-    <!-- Panel 0 -->
-    <div class="panel" id="p0">
+  </div>
+
+  <!-- Backlink Building -->
+  <div class="panel" id="p1">
+    <div class="card">
       <div class="ptitle">Backlink Building — off-site authority</div>
-      <div class="pprice">$1,500 USD/mo</div>
-      <div class="feats">
-        <div class="feat"><div class="tick">✓</div><p>Legitimate editorial backlinks and mentions — no PBNs, no link farms.</p></div>
-        <div class="feat"><div class="tick">✓</div><p>The off-site signals AI engines weigh when deciding who to cite.</p></div>
-        <div class="feat"><div class="tick">✓</div><p>Verified domain authority, real placements you can check yourself.</p></div>
-      </div>
-      <div class="cta-row"><a href="#" class="btn">Book a Strategy Call →</a></div>
+      <div class="pprice">$1,500<span class="u"> USD/mo</span></div>
+      <ul class="checks">
+        <li><span class="tick">✓</span>Legitimate editorial backlinks and mentions — no PBNs, no link farms</li>
+        <li><span class="tick">✓</span>The off-site signals AI engines weigh when deciding who to cite</li>
+        <li><span class="tick">✓</span>Verified domain authority, real placements you can check yourself</li>
+      </ul>
+      <a href="#" class="btn">Book a Strategy Call →</a>
     </div>
-    <!-- Panel 1 -->
-    <div class="panel" id="p1">
+  </div>
+
+  <!-- AI Content & SEO Strategy -->
+  <div class="panel" id="p2">
+    <div class="card">
       <div class="ptitle">AI Content &amp; SEO Strategy</div>
-      <div class="pprice">$3,000 USD</div>
-      <div class="feats">
-        <div class="feat"><div class="tick">✓</div><p>An answer-first content plan mapped to the questions buyers ask AI.</p></div>
-        <div class="feat"><div class="tick">✓</div><p>The comparison, FAQ, and definition pages AI lifts into answers.</p></div>
-        <div class="feat"><div class="tick">✓</div><p>Built to get quoted even when you don't rank in the top 10.</p></div>
-      </div>
-      <div class="cta-row"><a href="#" class="btn">Book a Strategy Call →</a></div>
+      <div class="pprice">$3,000<span class="u"> USD</span></div>
+      <ul class="checks">
+        <li><span class="tick">✓</span>An answer-first content plan mapped to the questions buyers ask AI</li>
+        <li><span class="tick">✓</span>The comparison, FAQ, and definition pages AI lifts into answers</li>
+        <li><span class="tick">✓</span>Built to get quoted even when you don't rank in the top 10</li>
+      </ul>
+      <a href="#" class="btn">Book a Strategy Call →</a>
     </div>
-    <!-- Panel 2 -->
-    <div class="panel" id="p2">
+  </div>
+
+  <!-- Website Design -->
+  <div class="panel" id="p3">
+    <div class="card">
       <div class="ptitle">Website Design / Optimization</div>
-      <div class="pprice">$1,500 USD</div>
-      <div class="feats">
-        <div class="feat"><div class="tick">✓</div><p>Fast, crawlable site structure that both humans and AI can read.</p></div>
-        <div class="feat"><div class="tick">✓</div><p>Clean schema, entity clarity, and prerender-safe markup.</p></div>
-        <div class="feat"><div class="tick">✓</div><p>The technical foundation the audit's fixes build on.</p></div>
-      </div>
-      <div class="cta-row"><a href="#" class="btn">Book a Strategy Call →</a></div>
+      <div class="pprice">$1,500<span class="u"> USD</span></div>
+      <ul class="checks">
+        <li><span class="tick">✓</span>Fast, crawlable site structure that both humans and AI can read</li>
+        <li><span class="tick">✓</span>Clean schema, entity clarity, and prerender-safe markup</li>
+        <li><span class="tick">✓</span>The technical foundation the audit's fixes build on</li>
+      </ul>
+      <a href="#" class="btn">Book a Strategy Call →</a>
     </div>
-    <!-- Panel 3 -->
-    <div class="panel" id="p3">
+  </div>
+
+  <!-- Free AI Audit -->
+  <div class="panel" id="p4">
+    <div class="card">
       <div class="ptitle">AI Visibility Audit</div>
       <div class="pprice free">Free</div>
-      <div class="feats">
-        <div class="feat"><div class="tick">✓</div><p>See where AI stands on your business today, scored 0–100.</p></div>
-        <div class="feat"><div class="tick">✓</div><p>Crawler access, schema, citations, and copy-paste fixes.</p></div>
-        <div class="feat"><div class="tick">✓</div><p>No cost, no call required — the report lands in your inbox.</p></div>
-      </div>
-      <div class="cta-row"><a href="#" class="btn">Run My Free Audit →</a></div>
+      <ul class="checks">
+        <li><span class="tick">✓</span>See where AI stands on your business today, scored 0–100</li>
+        <li><span class="tick">✓</span>Crawler access, schema, citations, and copy-paste fixes</li>
+        <li><span class="tick">✓</span>No cost, no call required — the report lands in your inbox</li>
+      </ul>
+      <a href="#" class="btn">Run My Free Audit →</a>
     </div>
   </div>
-
 </div>
 
 <script>
