@@ -22,6 +22,10 @@ let SAMPLE_REPORT_HTML = "";
 try { SAMPLE_REPORT_HTML = readFileSync(join(__dirname, "public", "sample-report.html"), "utf8"); } catch (e) {}
 let HERO_PREVIEW_HTML = "";
 try { HERO_PREVIEW_HTML = readFileSync(join(__dirname, "public", "hero-preview.html"), "utf8"); } catch (e) {}
+// Brand assets (served for schema logo/image + og); binary buffers loaded once
+let LOGO_PNG = null, HEADSHOT_PNG = null;
+try { LOGO_PNG = readFileSync(join(__dirname, "public", "assets", "specularis-logo.png")); } catch (e) {}
+try { HEADSHOT_PNG = readFileSync(join(__dirname, "public", "assets", "adev-headshot.png")); } catch (e) {}
 
 // ---- config (set these as env vars on the host; safe defaults below) ----
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || "https://primary-production-4d44.up.railway.app/webhook/free-audit";
@@ -215,6 +219,16 @@ app.get("/sample-report", (_req, res) => {
 app.get("/hero-preview", (_req, res) => {
   if (!HERO_PREVIEW_HTML) return res.status(404).send("Not found");
   res.type("html").send(HERO_PREVIEW_HTML);
+});
+
+// Brand assets (used as schema logo/image URLs)
+app.get("/assets/specularis-logo.png", (_req, res) => {
+  if (!LOGO_PNG) return res.status(404).send("Not found");
+  res.type("png").set("Cache-Control", "public, max-age=86400").send(LOGO_PNG);
+});
+app.get("/assets/adev-headshot.png", (_req, res) => {
+  if (!HEADSHOT_PNG) return res.status(404).send("Not found");
+  res.type("png").set("Cache-Control", "public, max-age=86400").send(HEADSHOT_PNG);
 });
 
 app.post("/mcp", async (req, res) => {
