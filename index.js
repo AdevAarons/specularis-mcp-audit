@@ -22,6 +22,8 @@ let SAMPLE_REPORT_HTML = "";
 try { SAMPLE_REPORT_HTML = readFileSync(join(__dirname, "public", "sample-report.html"), "utf8"); } catch (e) {}
 let HERO_PREVIEW_HTML = "";
 try { HERO_PREVIEW_HTML = readFileSync(join(__dirname, "public", "hero-preview.html"), "utf8"); } catch (e) {}
+let ADDONS_SWITCHER_HTML = "";
+try { ADDONS_SWITCHER_HTML = readFileSync(join(__dirname, "public", "addons-switcher.html"), "utf8"); } catch (e) {}
 // Brand assets (served for schema logo/image + og); binary buffers loaded once
 let LOGO_PNG = null, HEADSHOT_PNG = null;
 try { LOGO_PNG = readFileSync(join(__dirname, "public", "assets", "specularis-logo.png")); } catch (e) {}
@@ -219,6 +221,12 @@ app.get("/sample-report", (_req, res) => {
 app.get("/hero-preview", (_req, res) => {
   if (!HERO_PREVIEW_HTML) return res.status(404).send("Not found");
   res.type("html").send(HERO_PREVIEW_HTML);
+});
+
+// Add-ons tab switcher — embedded by URL on the pricing section (interactive)
+app.get("/addons-switcher", (_req, res) => {
+  if (!ADDONS_SWITCHER_HTML) return res.status(404).send("Not found");
+  res.type("html").send(ADDONS_SWITCHER_HTML);
 });
 
 // Brand assets (used as schema logo/image URLs)
