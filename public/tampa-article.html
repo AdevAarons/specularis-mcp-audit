@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tampa Study — article body to copy into CMS</title>
+<style>
+  body{ max-width:760px; margin:0 auto; padding:32px 22px 80px; font-family:Georgia,'Times New Roman',serif; font-size:18px; line-height:1.6; color:#15151f; }
+  h2{ font-family:Inter,Arial,sans-serif; font-size:24px; margin:34px 0 10px; line-height:1.25; }
+  p{ margin:0 0 16px; }
+  ul{ margin:0 0 18px; padding-left:22px; }
+  li{ margin:6px 0; }
+  a{ color:#0099ff; }
+  hr{ border:0; border-top:1px solid #e6e6ee; margin:28px 0; }
+  .note{ font-family:Inter,Arial,sans-serif; font-size:13px; color:#8a8a96; background:#faf9ff; border:1px solid #eee; border-radius:8px; padding:10px 14px; margin-bottom:24px; }
+</style>
+</head>
+<body>
+<div class="note">COPY-SOURCE — this is the Tampa study <b>article body only</b> (the H1 title, SEO fields, and JSON-LD schema are already set in the CMS). Select from the first paragraph below through the end of the FAQ, copy, and paste into the empty CMS Content field. Internal links are already embedded — keep them.</div>
+
+<p><b>Short answer:</b> We ran every Tampa real estate agency listed on Google Maps through an AI-visibility audit. <b>24% actively block GPTBot</b> — the crawler that feeds ChatGPT — with a hard 403. <b>42% publish no structured data at all</b>, so AI can't tell what the business even is. Put together, <b>44% are effectively invisible to AI answer engines.</b> When a buyer moving to Tampa asks ChatGPT "who's a good agent here," nearly half the market can't be recommended, no matter how good they are.</p>
+
+<p>Original research by Specularis, July 2026. We ran <a href="https://www.specularisinc.com/articles/miami-real-estate-ai-visibility-study">the same audit in Miami</a> and found nearly the identical pattern — a 25% GPTBot block rate versus Tampa's 24% — which tells us this is an industry-wide default, not a local quirk.</p>
+
+<h2>What did the study find?</h2>
+<p>We audited <b>45 Tampa real estate websites</b> (neutral market sample — see methodology):</p>
+<ul>
+  <li>Actively <b>block GPTBot</b> (hard 403): <b>24%</b> (11 of 45) — 5 of them via Cloudflare</li>
+  <li>Publish <b>no structured data at all</b>: <b>42%</b> (19 of 45)</li>
+  <li>Have any Organization/LocalBusiness schema: 33% (15 of 45)</li>
+  <li>Have proper <b>RealEstateAgent schema</b>: <b>11%</b> (5 of 45)</li>
+  <li>robots.txt addresses AI crawlers at all: 27% (12 of 45)</li>
+  <li>Have a real <b>llms.txt</b>: 13% (6 of 45)</li>
+  <li><b>Effectively invisible to AI</b>: <b>44%</b> (20 of 45)</li>
+</ul>
+<p>Two separate failures are stacking on top of each other.</p>
+
+<h2>How many Tampa real estate websites block ChatGPT?</h2>
+<p>Eleven of forty-five — <b>24%</b> — return a hard <b>403 Forbidden</b> when the request comes from OpenAI's GPTBot user-agent. Five of those blocks come from Cloudflare, which serves a JavaScript challenge page ("Just a moment…") that a crawler can never solve.</p>
+<p>Here's the part that matters: <b>almost none of these firms chose this.</b> A 403 to GPTBot is usually a default setting in a security product, switched on by a web host or a well-meaning IT contractor. The business never made a decision — it just quietly disappeared from AI answers.</p>
+
+<h2>Does blocking AI crawlers actually protect your website?</h2>
+<p>No. This is the most expensive misconception in the data.</p>
+<p><code>robots.txt</code> is a <i>polite request</i>, not a wall. The bots that actually threaten your site — scrapers, credential stuffers, DDoS traffic — <b>ignore robots.txt entirely.</b> They don't announce themselves and they don't read your rules. So disallowing GPTBot buys you exactly zero protection from attackers.</p>
+<p>What it does buy you: removal from the answer when a buyer asks an AI for a recommendation.</p>
+<p>Real protection lives at the firewall/WAF layer — rate limiting, bot-fight rules, IP reputation — and that stays fully intact whether or not you allow the well-behaved AI crawlers through. <b>Allowing GPTBot and PerplexityBot does not make you less secure.</b> These are documented, rate-limited, identifiable crawlers from public companies.</p>
+
+<h2>Why does structured data matter so much here?</h2>
+<p>Because getting crawled isn't enough — AI also has to understand <i>what you are</i>.</p>
+<p><b>42% of the sites we audited publish no structured data whatsoever.</b> No JSON-LD, nothing. And only <b>11%</b> identify themselves with <code>RealEstateAgent</code> schema — the machine-readable label that says "this is a real estate professional, in this city, with these credentials."</p>
+<p>Without it, an AI engine looking at the page sees some text and photos of houses. It can't confidently say "this is a real estate agent serving Tampa." So when it's asked to name three agents, it reaches for businesses it <i>can</i> verify — the ones with clean schema, consistent profiles, and third-party corroboration.</p>
+<p>You don't lose to a better agent. You lose to a more legible one.</p>
+
+<h2>What does this mean for a Tampa real estate agent?</h2>
+<p>The buyer behavior already shifted. Someone relocating to Tampa increasingly opens ChatGPT or Perplexity and asks a question instead of scrolling a page of blue links. The AI returns a short list of names.</p>
+<p>If you're not on that list, you don't get ranked lower — <b>you're absent.</b> There's no page two of an AI answer. And you never see the lead, so you don't even know it happened.</p>
+<p>The good news buried in this data: <b>almost nobody in this market has claimed it yet.</b> Only 11% have proper schema. Only 13% have an <code>llms.txt</code>. This is not a crowded race — it's an empty one, for now. <a href="https://www.specularisinc.com/articles/how-real-estate-agents-get-found-by-ai">Here's how a Tampa agent gets found by AI.</a></p>
+
+<h2>How we ran the study (methodology)</h2>
+<p>We published the full method so anyone can verify or repeat it.</p>
+<ul>
+  <li><b>Sample.</b> Pulled every "real estate agency" listing in Tampa, FL from Google Maps that has a website (July 2026), then deduplicated to unique root domains. No pre-filtering for AI visibility — a neutral market sample, not a list selected to look bad.</li>
+  <li><b>Exclusions.</b> Removed 3 sites that were unreachable or returned 404 to every user agent, including a normal browser. Counting broken sites as "blocking AI" would have overstated the finding.</li>
+  <li><b>Re-testing.</b> One site initially returned a 429 (rate limit); on re-test it returned 200, so we reclassified it as allowed. Transient errors are not blocks.</li>
+  <li><b>Crawler test.</b> Requested each homepage using OpenAI's GPTBot user-agent. A hard 403 counts as blocked; Cloudflare JavaScript challenges also count as blocked.</li>
+  <li><b>Identity test.</b> Fetched each homepage with a standard browser user-agent and counted <code>application/ld+json</code> structured-data blocks, checking for RealEstateAgent, LocalBusiness, and Organization types.</li>
+  <li><b>Emerging signals.</b> Checked robots.txt for AI user-agent directives, and <code>/llms.txt</code> — validating it returned real text rather than a soft-404 page.</li>
+</ul>
+<p>We report aggregates only. We don't name individual businesses.</p>
+
+<h2>How can I check my own website?</h2>
+<p>Three checks you can run yourself in about five minutes:</p>
+<ul>
+  <li><b>Crawler access.</b> Open <code>yoursite.com/robots.txt</code> and look for Disallow rules under GPTBot, ClaudeBot, PerplexityBot, or OAI-SearchBot. Then check with your host or Cloudflare whether an "AI scrapers" blocking rule is switched on — that block won't appear in robots.txt at all.</li>
+  <li><b>Structured data.</b> View your homepage source and search for <code>application/ld+json</code>. Nothing there means AI has no reliable way to identify you.</li>
+  <li><b>The real test.</b> Ask ChatGPT and Perplexity, "who's a good real estate agent in Tampa?" a few times and see whether your name ever appears.</li>
+</ul>
+<p>Or run the <a href="https://specularisinc.com/free-audit">free AI visibility audit</a> — it checks all of the above plus off-site signals, scores your site 0–100, and emails you the exact fixes. Free, no credit card.</p>
+
+<hr>
+
+<h2>FAQ</h2>
+<p><b>How many Tampa real estate websites block ChatGPT?</b><br>24% — 11 of the 45 sites we audited return a hard 403 to GPTBot, the crawler behind ChatGPT. Five of those blocks come from Cloudflare.</p>
+<p><b>Does blocking GPTBot protect my site from attacks?</b><br>No. Malicious bots ignore robots.txt and crawler rules entirely. Blocking AI crawlers provides no security benefit; it only removes you from AI-generated answers. Real protection comes from your firewall/WAF, which keeps working whether or not AI crawlers are allowed.</p>
+<p><b>What percentage of real estate sites have proper schema?</b><br>Only 11% of the sites we audited use RealEstateAgent schema, and 42% publish no structured data at all — meaning AI cannot reliably determine what the business is.</p>
+<p><b>What is llms.txt and do agents need it?</b><br><a href="https://www.specularisinc.com/articles/what-is-llms-txt">llms.txt</a> is a plain-text file at your site root that tells AI what your site is about. It's an emerging standard — just 13% of the sites we audited had one. It won't fix a blocked crawler, but it helps AI understand you faster.</p>
+<p><b>Is this study repeatable?</b><br>Yes. The methodology above is deliberately simple and reproducible: sample from Google Maps, request each homepage as GPTBot, and check for structured data. Our raw data is published alongside this article.</p>
+
+</body>
+</html>

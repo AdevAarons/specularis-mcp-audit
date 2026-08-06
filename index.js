@@ -22,6 +22,8 @@ let SAMPLE_REPORT_HTML = "";
 try { SAMPLE_REPORT_HTML = readFileSync(join(__dirname, "public", "sample-report.html"), "utf8"); } catch (e) {}
 let HERO_PREVIEW_HTML = "";
 try { HERO_PREVIEW_HTML = readFileSync(join(__dirname, "public", "hero-preview.html"), "utf8"); } catch (e) {}
+let TAMPA_ARTICLE_HTML = "";
+try { TAMPA_ARTICLE_HTML = readFileSync(join(__dirname, "public", "tampa-article.html"), "utf8"); } catch (e) {}
 let ADDONS_SWITCHER_HTML = "";
 try { ADDONS_SWITCHER_HTML = readFileSync(join(__dirname, "public", "addons-switcher.html"), "utf8"); } catch (e) {}
 let STATS_BAR_HTML = "";
@@ -223,6 +225,12 @@ app.get("/sample-report", (_req, res) => {
 app.get("/hero-preview", (_req, res) => {
   if (!HERO_PREVIEW_HTML) return res.status(404).send("Not found");
   res.type("html").send(HERO_PREVIEW_HTML);
+});
+
+// Copy-source for restoring the Tampa study article body into the Framer CMS
+app.get("/tampa-article", (_req, res) => {
+  if (!TAMPA_ARTICLE_HTML) return res.status(404).send("Not found");
+  res.type("html").send(TAMPA_ARTICLE_HTML);
 });
 
 // Add-ons tab switcher — embedded by URL on the pricing section (interactive)
