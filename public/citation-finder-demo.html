@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Citation Source Finder — Specularis (demo)</title>
+<style>
+  :root{ --blue:#1a6dff; --blue-dk:#0f4fcc; --wash:#f2f7ff; --ink:#15151f; --muted:#6b6b76; --line:#e6ecf5; --red:#c0392b; --green:#1e7d45; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:#f4f7fc; color:var(--ink); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.55; }
+  .wrap{ max-width:760px; margin:0 auto; padding:26px 18px 70px; }
+  .demo-tag{ background:#15151f; color:#fff; font-size:12px; padding:7px 12px; border-radius:7px; display:inline-block; margin-bottom:18px; }
+  .brand{ font-weight:800; letter-spacing:.16em; color:var(--blue); font-size:14px; }
+  .query-box{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:14px 0 22px; }
+  .query-box .lbl{ font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700; }
+  .query-box .q{ font-size:20px; font-weight:700; margin-top:4px; }
+  .query-box .biz{ color:var(--muted); font-size:14px; margin-top:8px; }
+  h1{ font-size:clamp(24px,4vw,32px); line-height:1.2; letter-spacing:-.02em; margin:6px 0 8px; }
+  .lead{ color:var(--muted); font-size:16.5px; margin-bottom:24px; }
+  .gap{ background:linear-gradient(135deg,var(--blue),var(--blue-dk)); color:#fff; border-radius:14px; padding:22px 24px; margin:6px 0 26px; }
+  .gap .big{ font-size:40px; font-weight:800; line-height:1; }
+  .gap .sub{ opacity:.92; margin-top:6px; font-size:15px; }
+  .section{ font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:800; margin:26px 0 12px; }
+  .src{ display:flex; align-items:center; gap:14px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:10px; }
+  .src .rank{ font-weight:800; color:var(--blue); font-size:15px; width:20px; text-align:center; }
+  .src .body{ flex:1; }
+  .src .name{ font-weight:700; font-size:15.5px; }
+  .src .type{ color:var(--muted); font-size:13px; }
+  .src .status{ font-size:12.5px; font-weight:800; padding:4px 10px; border-radius:20px; white-space:nowrap; }
+  .st-no{ background:#fdecec; color:var(--red); }
+  .st-yes{ background:#e9f9ef; color:var(--green); }
+  .cta{ background:#fff; border:2px solid var(--blue); border-radius:16px; padding:24px 26px; margin-top:28px; text-align:center; }
+  .cta h3{ font-size:20px; margin-bottom:8px; }
+  .cta p{ color:var(--muted); margin-bottom:18px; }
+  .btn{ background:var(--blue); color:#fff; text-decoration:none; font-weight:800; font-size:16px; padding:14px 26px; border-radius:11px; display:inline-block; }
+  .btn:hover{ background:var(--blue-dk); }
+  .note{ color:#9aa4b2; font-size:12.5px; text-align:center; margin-top:22px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="demo-tag">DEMO — this is what the lead-magnet results page produces</div>
+  <div class="brand">SPECULARIS · AI CITATION SOURCE FINDER</div>
+
+  <div class="query-box">
+    <div class="lbl">We asked AI</div>
+    <div class="q">"Who's the best real estate agent in Tampa, FL?"</div>
+    <div class="biz">Checking for: <b>your-agency.com</b> · Tampa real estate</div>
+  </div>
+
+  <h1>AI doesn't pick an agent. It quotes these 6 sources.</h1>
+  <p class="lead">When someone asks ChatGPT, Perplexity, or Google AI for the best agent in Tampa, the answer is assembled from the sources below — the pages AI trusts for this question. If your name isn't <i>in</i> them, you're not in the answer.</p>
+
+  <div class="gap">
+    <div class="big">0 of 6</div>
+    <div class="sub">sources AI cites for this query where your business currently appears.</div>
+  </div>
+
+  <div class="section">Where AI gets its answer (ranked by how often it's cited)</div>
+
+  <div class="src"><div class="rank">1</div><div class="body"><div class="name">Expertise.com — "20 Best Tampa Real Estate Agents"</div><div class="type">Curated directory / listicle · high authority</div></div><div class="status st-no">Not listed</div></div>
+  <div class="src"><div class="rank">2</div><div class="body"><div class="name">FastExpert — Top Tampa Agents</div><div class="type">Agent directory · verified profiles</div></div><div class="status st-no">Not listed</div></div>
+  <div class="src"><div class="rank">3</div><div class="body"><div class="name">HomeLight — Top Real Estate Agents in Tampa</div><div class="type">Agent-matching directory</div></div><div class="status st-no">Not listed</div></div>
+  <div class="src"><div class="rank">4</div><div class="body"><div class="name">EffectiveAgents — Top Realtors in Tampa</div><div class="type">Rankings directory</div></div><div class="status st-no">Not listed</div></div>
+  <div class="src"><div class="rank">5</div><div class="body"><div class="name">Yelp — Best 10 Real Estate Agents in Tampa</div><div class="type">Review platform</div></div><div class="status st-no">Not listed</div></div>
+  <div class="src"><div class="rank">6</div><div class="body"><div class="name">2collegebrothers.com — "The Best Tampa Realtors"</div><div class="type">Local blog listicle</div></div><div class="status st-no">Not listed</div></div>
+
+  <div class="cta">
+    <h3>This is your target list.</h3>
+    <p>AI recommends whoever these 6 sources name. Getting cited means getting <i>into</i> them — legitimately, not with spam. That's the exact work we do.</p>
+    <a href="https://specularisinc.com/free-audit" class="btn">Get your full report + target list →</a>
+  </div>
+
+  <div class="note">Demo populated with live search data for "best real estate agent in Tampa, FL." The real tool queries Perplexity + Google AI directly and checks your domain against each cited source automatically.</div>
+</div>
+</body>
+</html>
