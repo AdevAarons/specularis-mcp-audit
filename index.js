@@ -36,6 +36,9 @@ try { STATS_BAR_HTML = readFileSync(join(__dirname, "public", "stats-bar.html"),
 let LOGO_PNG = null, HEADSHOT_PNG = null;
 try { LOGO_PNG = readFileSync(join(__dirname, "public", "assets", "specularis-logo.png")); } catch (e) {}
 try { HEADSHOT_PNG = readFileSync(join(__dirname, "public", "assets", "adev-headshot.png")); } catch (e) {}
+let MINERAL_COVER_PNG=null, MINERAL_COVER_ALT_PNG=null;
+try { MINERAL_COVER_PNG = readFileSync(join(__dirname, "public", "assets", "mineral-cover.png")); } catch (e) {}
+try { MINERAL_COVER_ALT_PNG = readFileSync(join(__dirname, "public", "assets", "mineral-cover-alt.png")); } catch (e) {}
 
 // ---- config (set these as env vars on the host; safe defaults below) ----
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || "https://primary-production-4d44.up.railway.app/webhook/free-audit";
@@ -342,6 +345,8 @@ app.get("/assets/adev-headshot.png", (_req, res) => {
   if (!HEADSHOT_PNG) return res.status(404).send("Not found");
   res.type("png").set("Cache-Control", "public, max-age=86400").send(HEADSHOT_PNG);
 });
+app.get("/assets/mineral-cover.png", (_req, res) => { if (!MINERAL_COVER_PNG) return res.status(404).send("Not found"); res.type("png").set("Cache-Control","public, max-age=86400").send(MINERAL_COVER_PNG); });
+app.get("/assets/mineral-cover-alt.png", (_req, res) => { if (!MINERAL_COVER_ALT_PNG) return res.status(404).send("Not found"); res.type("png").set("Cache-Control","public, max-age=86400").send(MINERAL_COVER_ALT_PNG); });
 
 app.post("/mcp", async (req, res) => {
   const server = buildServer();
