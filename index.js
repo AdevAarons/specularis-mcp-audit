@@ -24,6 +24,8 @@ let HERO_PREVIEW_HTML = "";
 try { HERO_PREVIEW_HTML = readFileSync(join(__dirname, "public", "hero-preview.html"), "utf8"); } catch (e) {}
 let TAMPA_ARTICLE_HTML = "";
 try { TAMPA_ARTICLE_HTML = readFileSync(join(__dirname, "public", "tampa-article.html"), "utf8"); } catch (e) {}
+let MINERAL_ARTICLE_HTML = "";
+try { MINERAL_ARTICLE_HTML = readFileSync(join(__dirname, "public", "mineral-article.html"), "utf8"); } catch (e) {}
 let ADDONS_SWITCHER_HTML = "";
 try { ADDONS_SWITCHER_HTML = readFileSync(join(__dirname, "public", "addons-switcher.html"), "utf8"); } catch (e) {}
 let STATS_BAR_HTML = "";
@@ -231,6 +233,12 @@ app.get("/hero-preview", (_req, res) => {
 app.get("/tampa-article", (_req, res) => {
   if (!TAMPA_ARTICLE_HTML) return res.status(404).send("Not found");
   res.type("html").send(TAMPA_ARTICLE_HTML);
+});
+
+// Copy-source for the "Roman mineral" disambiguation article body
+app.get("/mineral-article", (_req, res) => {
+  if (!MINERAL_ARTICLE_HTML) return res.status(404).send("Not found");
+  res.type("html").send(MINERAL_ARTICLE_HTML);
 });
 
 // Add-ons tab switcher — embedded by URL on the pricing section (interactive)
