@@ -28,6 +28,8 @@ let MINERAL_ARTICLE_HTML = "";
 try { MINERAL_ARTICLE_HTML = readFileSync(join(__dirname, "public", "mineral-article.html"), "utf8"); } catch (e) {}
 let CITATION_FINDER_HTML = "";
 try { CITATION_FINDER_HTML = readFileSync(join(__dirname, "public", "citation-finder-demo.html"), "utf8"); } catch (e) {}
+let FINDER_HTML = "";
+try { FINDER_HTML = readFileSync(join(__dirname, "public", "finder.html"), "utf8"); } catch (e) {}
 let ADDONS_SWITCHER_HTML = "";
 try { ADDONS_SWITCHER_HTML = readFileSync(join(__dirname, "public", "addons-switcher.html"), "utf8"); } catch (e) {}
 let STATS_BAR_HTML = "";
@@ -281,12 +283,19 @@ app.get("/citation-finder-demo", (_req, res) => {
   res.type("html").send(CITATION_FINDER_HTML);
 });
 
+// The live AI Citation Source Finder tool (input form -> results)
+app.get("/finder", (_req, res) => {
+  if (!FINDER_HTML) return res.status(404).send("Not found");
+  res.type("html").send(FINDER_HTML);
+});
+
 // AI Citation Source Finder — core endpoint. POST { query, domain } -> real cited sources + presence.
 app.post("/citation-finder", async (req, res) => {
   try {
-    const { query, domain } = req.body || {};
+    const { query, domain, email } = req.body || {};
     if (!query || !domain) return res.status(400).json({ error: "query and domain are required" });
     if (!PERPLEXITY_API_KEY) return res.status(503).json({ error: "PERPLEXITY_API_KEY not set on the server" });
+    if (email) console.log("CITATION-FINDER LEAD:", JSON.stringify({ email, domain, query, at: new Date().toISOString() }));
     const site = normalizeUrl(domain);
     const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
 
