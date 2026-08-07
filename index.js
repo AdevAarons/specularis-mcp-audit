@@ -41,6 +41,7 @@ try { HEADSHOT_PNG = readFileSync(join(__dirname, "public", "assets", "adev-head
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || "https://primary-production-4d44.up.railway.app/webhook/free-audit";
 const CONTACT_URL = process.env.CONTACT_URL || "https://specularisinc.com/contact";
 const AUDIT_URL = process.env.AUDIT_URL || "https://specularisinc.com/free-audit";
+const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || ""; // set in Railway Variables
 const PORT = process.env.PORT || 3000;
 
 // ---- helpers ----
@@ -99,6 +100,34 @@ const quickSnapshot = async (site) => {
 const triggerFullAudit = async (payload) => {
   const r = await fetchWithTimeout(N8N_WEBHOOK_URL, { method: "POST", headers: { "Content-Type": "application/json", "x-audit-source": "specularis-mcp" }, body: JSON.stringify(payload) }, 12000);
   return r.ok;
+};
+
+// ---- AI Citation Source Finder helpers ----
+const classifySource = (url) => {
+  const h = (String(url).match(/^https?:\/\/([^\/]+)/i)?.[1] || "").toLowerCase().replace(/^www\./, "");
+  if (/reddit\.com/.test(h)) return "Reddit thread";
+  if (/youtube\.com|youtu\.be/.test(h)) return "YouTube video";
+  if (/quora\.com/.test(h)) return "Q&A platform (Quora)";
+  if (/(wikipedia|wikidata)\.org/.test(h)) return "Knowledge base";
+  if (/(yelp|expertise|fastexpert|homelight|effectiveagents|thumbtack|angi|clutch|g2|capterra|trustpilot|bbb|zillow|realtor|avvo|justia|findlaw|nolo|houzz|tripadvisor|glassdoor)\./.test(h)) return "Directory / review platform";
+  if (/(medium|substack|linkedin|forbes|inc|entrepreneur)\.com/.test(h)) return "Publishing / press platform";
+  return "Website / blog";
+};
+
+const callPerplexity = async (query) => {
+  if (!PERPLEXITY_API_KEY) return null;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 25000);
+  try {
+    const r = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST", signal: ctrl.signal,
+      headers: { "Authorization": "Bearer " + PERPLEXITY_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "sonar", messages: [{ role: "user", content: query }] }),
+    });
+    if (!r.ok) return { error: "perplexity " + r.status };
+    return await r.json();
+  } catch (e) { return { error: "perplexity fetch failed" }; }
+  finally { clearTimeout(t); }
 };
 
 // server identity (surfaced in the MCP handshake + directory listings)
@@ -247,6 +276,49 @@ app.get("/mineral-article", (_req, res) => {
 app.get("/citation-finder-demo", (_req, res) => {
   if (!CITATION_FINDER_HTML) return res.status(404).send("Not found");
   res.type("html").send(CITATION_FINDER_HTML);
+});
+
+// AI Citation Source Finder — core endpoint. POST { query, domain } -> real cited sources + presence.
+app.post("/citation-finder", async (req, res) => {
+  try {
+    const { query, domain } = req.body || {};
+    if (!query || !domain) return res.status(400).json({ error: "query and domain are required" });
+    if (!PERPLEXITY_API_KEY) return res.status(503).json({ error: "PERPLEXITY_API_KEY not set on the server" });
+    const site = normalizeUrl(domain);
+    const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
+
+    const data = await callPerplexity(String(query).slice(0, 300));
+    if (!data || data.error) return res.status(502).json({ error: data?.error || "AI query failed" });
+
+    // extract cited sources (support both response shapes)
+    let raw = [];
+    if (Array.isArray(data.search_results)) raw = data.search_results.map((s) => ({ url: s.url, title: s.title || "" }));
+    else if (Array.isArray(data.citations)) raw = data.citations.map((u) => ({ url: u, title: "" }));
+
+    // dedupe by host, cap at 10
+    const seen = new Set(); const sources = [];
+    for (const c of raw) {
+      if (!c.url) continue;
+      const host = (String(c.url).match(/^https?:\/\/([^\/]+)/i)?.[1] || "").toLowerCase().replace(/^www\./, "");
+      if (!host || seen.has(host)) continue;
+      seen.add(host);
+      sources.push({ url: c.url, host, title: c.title, type: classifySource(c.url) });
+      if (sources.length >= 10) break;
+    }
+
+    // presence check: does the user's domain appear in each cited source?
+    await Promise.all(sources.map(async (s) => {
+      if (s.host === bare || s.host.endsWith("." + bare)) { s.isYou = true; s.appearsYou = true; return; }
+      const f = await fetchWithTimeout(s.url, {}, 8000);
+      s.appearsYou = (f.text || "").toLowerCase().includes(bare);
+    }));
+
+    const total = sources.length;
+    const inCount = sources.filter((s) => s.appearsYou).length;
+    res.json({ query, domain: bare, answer: (data.choices?.[0]?.message?.content || "").slice(0, 1200), total, inCount, sources });
+  } catch (e) {
+    res.status(500).json({ error: "internal error" });
+  }
 });
 
 // Add-ons tab switcher — embedded by URL on the pricing section (interactive)
