@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Specularis — pricing</title>
+<style>
+  :root{ --blue:#2467E3; --blue-lt:#1A6DFF; --ink:#161616; --muted:#6b6b76; --card:#F5F5F5; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:transparent; color:var(--ink); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.5; padding:6px 16px 20px; }
+  .wrap{ max-width:860px; margin:0 auto; }
+
+  .tabs{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:0 auto 26px; }
+  .tab{ border:0; background:#eceef3; color:#5b6270; font:inherit; font-size:14.5px; font-weight:700; padding:11px 22px; border-radius:30px; cursor:pointer; white-space:nowrap; transition:background .18s ease, color .18s ease; }
+  .tab:hover{ color:var(--ink); background:#e2e5ec; }
+  .tab.active{ background:var(--blue); color:#fff; }
+
+  .panel{ display:none; }
+  .panel.show{ display:block; }
+  .card{ background:var(--card); border-radius:20px; padding:40px 40px 36px; position:relative; }
+  @media(max-width:520px){ .card{ padding:28px 22px; } }
+
+  .badge{ position:absolute; top:22px; right:26px; background:var(--blue); color:#fff; font-size:12px; font-weight:800; padding:6px 14px; border-radius:20px; }
+  .ptitle{ font-size:24px; font-weight:600; color:var(--ink); }
+  .pprice{ font-size:36px; font-weight:800; letter-spacing:-.02em; color:var(--ink); margin:4px 0 0; }
+  .pprice .u{ font-size:20px; font-weight:800; }
+  .psub{ color:var(--muted); font-size:15px; margin:12px 0 26px; max-width:52ch; }
+
+  .checks{ list-style:none; display:grid; gap:16px; margin:0 0 30px; }
+  .checks li{ position:relative; padding-left:32px; font-size:16px; color:#2c2c34; }
+  .checks .tick{ position:absolute; left:0; top:1px; color:var(--blue); font-size:16px; font-weight:800; }
+
+  .btn{ display:inline-block; background:var(--blue); color:#fff; text-decoration:none; font-weight:700; font-size:15px; padding:14px 26px; border-radius:30px; transition:transform .14s ease, box-shadow .14s ease, background .14s ease; }
+  .btn:hover{ transform:translateY(-2px); box-shadow:0 10px 24px rgba(36,103,227,.3); background:var(--blue-lt); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-panel="local">Local / Small Business</button>
+    <button class="tab" data-panel="ent">Enterprise</button>
+  </div>
+
+  <div class="panel show" id="local">
+    <div class="card">
+      <div class="ptitle">Local / Small Business</div>
+      <div class="pprice">$2,500<span class="u"> USD/mo</span></div>
+      <div class="psub">For local businesses that want to be the name AI recommends in their city.</div>
+      <ul class="checks">
+        <li><span class="tick">✓</span>Free AI Visibility Audit + monthly Scoreboard</li>
+        <li><span class="tick">✓</span>AI Search Optimization (ChatGPT, Perplexity, Claude, Gemini, Google AI)</li>
+        <li><span class="tick">✓</span>Entity &amp; technical foundations (schema, crawlability, entity cleanup)</li>
+        <li><span class="tick">✓</span>Local citation &amp; directory building</li>
+        <li><span class="tick">✓</span>Targeted community presence (done legitimately)</li>
+        <li><span class="tick">✓</span>Monthly reporting + review call</li>
+      </ul>
+      <a href="#" class="btn">Run My Free Audit →</a>
+    </div>
+  </div>
+
+  <div class="panel" id="ent">
+    <div class="card">
+      <div class="badge">Most Complete</div>
+      <div class="ptitle">Enterprise</div>
+      <div class="pprice">$5,000<span class="u"> USD/mo</span></div>
+      <div class="psub">For brands that want to own their category across every AI engine.</div>
+      <ul class="checks">
+        <li><span class="tick">✓</span>Everything in Local, at scale</li>
+        <li><span class="tick">✓</span>Competitive share-of-voice tracking (15–25 queries × 4 engines)</li>
+        <li><span class="tick">✓</span>Earned media / digital PR engine</li>
+        <li><span class="tick">✓</span>Answer-first content cluster</li>
+        <li><span class="tick">✓</span>Entity &amp; knowledge-graph strategy + brand-safety monitoring</li>
+        <li><span class="tick">✓</span>AI-referral attribution</li>
+        <li><span class="tick">✓</span>Dedicated strategist + quarterly business review</li>
+      </ul>
+      <a href="#" class="btn">Book a Strategy Call →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  var tabs = document.querySelectorAll('.tab'), panels = document.querySelectorAll('.panel');
+  tabs.forEach(function(t){
+    t.addEventListener('click', function(){
+      tabs.forEach(function(x){ x.classList.remove('active'); });
+      panels.forEach(function(p){ p.classList.remove('show'); });
+      t.classList.add('active');
+      document.getElementById(t.getAttribute('data-panel')).classList.add('show');
+    });
+  });
+</script>
+</body>
+</html>
