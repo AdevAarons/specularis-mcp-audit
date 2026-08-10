@@ -255,18 +255,6 @@ app.use(express.json());
 
 app.get("/", (_req, res) => res.json({ name: "specularis-ai-visibility-audit", status: "ok", mcp: "/mcp" }));
 
-// TEMP diagnostic — reports env presence WITHOUT leaking values. Remove after debugging.
-app.get("/debug-env", (_req, res) => {
-  res.json({
-    perplexity_present: typeof process.env.PERPLEXITY_API_KEY === "string",
-    perplexity_len: (process.env.PERPLEXITY_API_KEY || "").length,
-    perplexity_prefix: (process.env.PERPLEXITY_API_KEY || "").slice(0, 5),
-    n8n_present: typeof process.env.N8N_WEBHOOK_URL === "string",
-    railway_env: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_ENVIRONMENT || null,
-    railway_service: process.env.RAILWAY_SERVICE_NAME || null,
-    custom_var_names: Object.keys(process.env).filter((k) => !/^(PATH|HOME|HOSTNAME|PWD|NODE|npm_|SHLVL|_|TERM|LANG|RAILWAY_)/i.test(k)).slice(0, 40),
-  });
-});
 
 // Public sample audit report (embedded by URL on specularisinc.com/sample-report)
 app.get("/sample-report", (_req, res) => {
