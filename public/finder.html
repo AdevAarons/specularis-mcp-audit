@@ -4,99 +4,139 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Citation Source Finder — Specularis</title>
-<meta name="description" content="Find out exactly which sources AI cites for your industry — and whether your business appears in any of them.">
+<meta name="description" content="Find out exactly which sources ChatGPT, Perplexity, and Claude cite for your industry — and whether your business appears in any of them.">
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
 <style>
-  :root{ --blue:#1a6dff; --blue-dk:#0f4fcc; --wash:#f2f7ff; --ink:#15151f; --muted:#6b6b76; --line:#e6ecf5; --red:#c0392b; --green:#1e7d45; }
+  :root{
+    --paper:#FFFFFF; --surface:#F9F9FA; --card:#FFFFFF;
+    --ink:#161616; --sec:#3B3B3B; --muted:#999999; --faint:#B4B4B4;
+    --line:#EBEBEB; --line-dk:#E0E0E0;
+    --blue:#2467E3; --blue-dk:#1C4FA6; --link:#0099FF; --blue-lt:#8AB9FF; --wash:#EEF3FE;
+    --red:#B93A2E; --red-wash:#FBEDEB; --green:#1C7A42; --green-wash:#EBF7F0;
+    --font:'Satoshi',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
   *{ box-sizing:border-box; margin:0; padding:0; }
-  body{ background:#f4f7fc; color:var(--ink); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.55; }
-  .wrap{ max-width:720px; margin:0 auto; padding:34px 18px 80px; }
-  .brand{ font-weight:800; letter-spacing:.16em; color:var(--blue); font-size:14px; text-align:center; }
-  h1{ font-size:clamp(26px,5vw,38px); line-height:1.12; letter-spacing:-.025em; text-align:center; margin:14px 0 10px; }
+  body{ background:var(--paper); color:var(--ink); font-family:var(--font); line-height:1.55; -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:660px; margin:0 auto; padding:40px 22px 90px; }
+
+  /* brand lockup */
+  .brand{ display:flex; align-items:center; justify-content:center; gap:11px; }
+  .brand img{ width:38px; height:38px; border-radius:10px; display:block; }
+  .brand .name{ font-weight:900; font-size:20px; letter-spacing:-.02em; }
+  .brand .tag{ display:block; text-align:center; font-size:11.5px; font-weight:700; letter-spacing:.2em; text-transform:uppercase; color:var(--muted); margin-top:12px; }
+
+  h1{ font-weight:900; font-size:clamp(29px,5.2vw,42px); line-height:1.1; letter-spacing:-.028em; text-align:center; margin:20px auto 14px; max-width:15ch; }
   h1 .accent{ color:var(--blue); }
-  .lead{ color:var(--muted); font-size:17px; text-align:center; max-width:52ch; margin:0 auto 28px; }
+  .lead{ color:var(--sec); font-size:16.5px; text-align:center; max-width:50ch; margin:0 auto 34px; }
 
-  form{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:24px 24px 26px; box-shadow:0 10px 34px rgba(20,20,40,.06); }
-  label{ display:block; font-weight:700; font-size:14px; margin:14px 0 6px; }
-  label:first-child{ margin-top:0; }
-  .hint{ color:var(--muted); font-weight:400; font-size:12.5px; }
-  input{ width:100%; font-size:16px; padding:13px 15px; border:1.5px solid var(--line); border-radius:10px; font-family:inherit; }
-  input:focus{ outline:none; border-color:var(--blue); }
-  button{ width:100%; margin-top:20px; background:var(--blue); color:#fff; border:0; border-radius:11px; padding:15px; font-size:16.5px; font-weight:800; cursor:pointer; font-family:inherit; }
-  button:hover{ background:var(--blue-dk); } button:disabled{ opacity:.6; cursor:default; }
-  .micro{ text-align:center; color:var(--muted); font-size:12.5px; margin-top:12px; }
+  /* form */
+  form{ background:var(--card); border:1px solid var(--line); border-radius:20px; padding:28px 26px 30px; box-shadow:0 12px 40px rgba(22,22,30,.05); }
+  .field{ margin-bottom:18px; }
+  label{ display:block; font-size:14px; font-weight:700; color:var(--ink); margin-bottom:8px; }
+  label .hint{ font-weight:400; color:var(--muted); font-size:13px; }
+  input{ width:100%; font-family:inherit; font-size:16px; color:var(--ink); padding:14px 16px; border:1.5px solid var(--line-dk); border-radius:12px; background:#fff; transition:border-color .15s, box-shadow .15s; }
+  input::placeholder{ color:var(--faint); }
+  input:focus{ outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(36,103,227,.12); }
+  button{ width:100%; margin-top:8px; background:var(--blue); color:#fff; border:0; border-radius:40px; padding:16px; font-family:inherit; font-size:16px; font-weight:700; cursor:pointer; transition:background .15s, transform .05s; }
+  button:hover{ background:var(--blue-dk); } button:active{ transform:translateY(1px); } button:disabled{ opacity:.55; cursor:default; }
+  .micro{ text-align:center; color:var(--muted); font-size:12.5px; margin-top:14px; }
 
-  #loading, #error{ display:none; text-align:center; padding:40px 10px; }
-  #loading .spin{ width:34px; height:34px; border:3px solid var(--line); border-top-color:var(--blue); border-radius:50%; margin:0 auto 16px; animation:sp 0.8s linear infinite; }
-  @keyframes sp{ to{ transform:rotate(360deg); } }
+  /* loading + error */
+  #loading, #error{ display:none; text-align:center; padding:60px 10px; }
+  #loading .dots span{ display:inline-block; width:8px; height:8px; margin:0 3px; border-radius:50%; background:var(--blue); animation:pulse 1.2s ease-in-out infinite; }
+  #loading .dots span:nth-child(2){ animation-delay:.18s; } #loading .dots span:nth-child(3){ animation-delay:.36s; }
+  @keyframes pulse{ 0%,100%{ opacity:.25; transform:translateY(0); } 40%{ opacity:1; transform:translateY(-5px); } }
+  #loading .msg{ color:var(--sec); font-size:15px; margin-top:16px; }
   #error{ color:var(--red); font-weight:600; }
 
   /* results */
   #results{ display:none; }
-  .query-box{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin:0 0 20px; }
-  .query-box .lbl{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700; }
-  .query-box .q{ font-size:18px; font-weight:700; margin-top:3px; }
-  .query-box .biz{ color:var(--muted); font-size:13.5px; margin-top:6px; }
-  .gap{ background:linear-gradient(135deg,var(--blue),var(--blue-dk)); color:#fff; border-radius:14px; padding:22px 24px; margin-bottom:22px; }
-  .gap .big{ font-size:38px; font-weight:800; line-height:1; }
-  .gap .sub{ opacity:.92; margin-top:6px; font-size:15px; }
-  .section{ font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:800; margin:22px 0 12px; }
-  .src{ display:flex; align-items:center; gap:13px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:13px 15px; margin-bottom:9px; }
-  .src .rank{ font-weight:800; color:var(--blue); width:20px; text-align:center; }
+  .recap{ text-align:center; margin-bottom:6px; }
+  .recap .lbl{ font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700; }
+  .recap .q{ font-weight:700; font-size:21px; line-height:1.28; margin:8px auto 4px; max-width:26ch; letter-spacing:-.01em; }
+  .recap .biz{ color:var(--muted); font-size:13px; }
+
+  .gap{ text-align:center; background:var(--surface); border:1px solid var(--line); border-radius:20px; padding:28px 24px; margin:22px 0 8px; }
+  .gap .big{ font-weight:900; font-size:60px; line-height:1; color:var(--blue); letter-spacing:-.03em; }
+  .gap .sub{ color:var(--sec); font-size:15px; margin-top:12px; max-width:38ch; margin-left:auto; margin-right:auto; }
+
+  .section{ font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-weight:700; margin:26px 0 10px; }
+  .src{ display:flex; align-items:flex-start; gap:14px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:15px 17px; margin-bottom:9px; }
+  .src .rank{ font-weight:900; font-size:15px; color:var(--blue); width:20px; flex-shrink:0; padding-top:1px; text-align:center; }
   .src .body{ flex:1; min-width:0; }
-  .src .name{ font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .src .name{ font-weight:700; font-size:15.5px; line-height:1.3; }
   .src .name a{ color:var(--ink); text-decoration:none; }
-  .src .type{ color:var(--muted); font-size:12.5px; }
-  .engs{ display:flex; gap:5px; margin-top:5px; flex-wrap:wrap; }
-  .eng{ font-size:10.5px; font-weight:800; letter-spacing:.03em; padding:2px 7px; border-radius:20px; background:var(--wash); color:var(--blue); border:1px solid #d4e3ff; }
-  .src .status{ font-size:12px; font-weight:800; padding:4px 10px; border-radius:20px; white-space:nowrap; }
-  .st-no{ background:#fdecec; color:var(--red); } .st-yes{ background:#e9f9ef; color:var(--green); }
-  .cta{ background:#fff; border:2px solid var(--blue); border-radius:16px; padding:24px; margin-top:26px; text-align:center; }
-  .cta h3{ font-size:20px; margin-bottom:8px; } .cta p{ color:var(--muted); margin-bottom:18px; }
-  .btn{ background:var(--blue); color:#fff; text-decoration:none; font-weight:800; font-size:16px; padding:14px 26px; border-radius:11px; display:inline-block; }
-  .restart{ display:block; text-align:center; margin-top:20px; color:var(--muted); font-size:13.5px; background:none; border:0; cursor:pointer; width:100%; }
+  .src .name a:hover{ color:var(--link); }
+  .src .type{ color:var(--muted); font-size:12.5px; margin-top:3px; }
+  .engs{ display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .eng{ font-size:10.5px; font-weight:700; letter-spacing:.02em; padding:2px 8px; border-radius:5px; background:var(--wash); color:var(--blue-dk); }
+  .src .status{ font-size:11.5px; font-weight:700; padding:4px 11px; border-radius:20px; white-space:nowrap; flex-shrink:0; margin-top:1px; }
+  .st-no{ background:var(--red-wash); color:var(--red); } .st-yes{ background:var(--green-wash); color:var(--green); }
+
+  .cta{ margin-top:30px; padding:30px 26px; background:var(--surface); border:1px solid var(--line); border-radius:20px; text-align:center; }
+  .cta h3{ font-weight:900; font-size:22px; line-height:1.15; letter-spacing:-.02em; margin-bottom:10px; }
+  .cta p{ color:var(--sec); font-size:15px; margin-bottom:20px; max-width:40ch; margin-left:auto; margin-right:auto; }
+  .btn{ background:var(--blue); color:#fff; text-decoration:none; font-weight:700; font-size:15.5px; padding:15px 30px; border-radius:40px; display:inline-block; transition:background .15s; }
+  .btn:hover{ background:var(--blue-dk); }
+  .restart{ display:block; text-align:center; margin-top:24px; color:var(--muted); font-size:13.5px; background:none; border:0; cursor:pointer; width:100%; font-family:inherit; }
+  .restart:hover{ color:var(--sec); }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="brand">SPECULARIS</div>
+  <div class="brand"><img src="/assets/specularis-logo.png" alt="Specularis"><span class="name">Specularis</span></div>
+  <span class="tag">AI Citation Finder</span>
   <h1>Where does AI get its answers <span class="accent">about your business?</span></h1>
-  <p class="lead">Enter the question your customers ask AI. We'll show you the exact sources ChatGPT, Perplexity, and Claude pull their answer from — and whether your business is in any of them.</p>
+  <p class="lead">Ask the question your customers ask AI. We'll show you the exact sources ChatGPT, Perplexity, and Claude build their answer from — and whether your business appears in any of them.</p>
 
   <form id="form">
-    <label>The question your customers ask AI <span class="hint">— be specific</span></label>
-    <input id="query" type="text" placeholder="e.g. best real estate agent in Tampa, FL" required>
-    <label>Your website</label>
-    <input id="domain" type="text" placeholder="your-business.com" required>
-    <label>Where should we send your full report?</label>
-    <input id="email" type="email" placeholder="you@business.com" required>
-    <button type="submit" id="go">Show me where AI cites →</button>
-    <div class="micro">Free · takes about 20 seconds · no credit card</div>
+    <div class="field">
+      <label>The question your customers ask AI <span class="hint">— be specific</span></label>
+      <input id="query" type="text" placeholder="e.g. best real estate agent in Tampa, FL" required>
+    </div>
+    <div class="field">
+      <label>Your website</label>
+      <input id="domain" type="text" placeholder="your-business.com" required>
+    </div>
+    <div class="field">
+      <label>Where should we send your full report?</label>
+      <input id="email" type="email" placeholder="you@business.com" required>
+    </div>
+    <button type="submit" id="go">Show me where AI cites</button>
+    <div class="micro">Free · about 30 seconds · no credit card</div>
   </form>
 
-  <div id="loading"><div class="spin"></div>Asking Perplexity and Claude, then checking every source they cite…</div>
+  <div id="loading">
+    <div class="dots"><span></span><span></span><span></span></div>
+    <div class="msg">Asking Perplexity and Claude, then checking every source they cite…</div>
+  </div>
   <div id="error"></div>
 
   <div id="results">
-    <div class="query-box">
+    <div class="recap">
       <div class="lbl">We asked AI</div>
       <div class="q" id="r-query"></div>
       <div class="biz" id="r-biz"></div>
     </div>
-    <div class="gap"><div class="big" id="r-gap"></div><div class="sub">sources AI cites for this question where your business appears.</div></div>
+    <div class="gap">
+      <div class="big" id="r-gap"></div>
+      <div class="sub">of the sources AI cites for this question are ones your business appears in.</div>
+    </div>
     <div class="section">Where AI gets its answer</div>
     <div id="r-sources"></div>
     <div class="cta">
       <h3 id="r-cta-h">This is your target list.</h3>
       <p>AI recommends whoever these sources name. Getting cited means getting into them — legitimately. That's exactly the work we do.</p>
-      <a href="https://specularisinc.com/free-audit" class="btn">Get your full AI visibility audit →</a>
+      <a href="https://specularisinc.com/free-audit" class="btn">Get your full AI visibility audit</a>
     </div>
-    <button class="restart" onclick="location.reload()">← Check another question</button>
+    <button class="restart" onclick="location.reload()">Check another question</button>
   </div>
 </div>
 
 <script>
   var form=document.getElementById('form'), loading=document.getElementById('loading'), error=document.getElementById('error'), results=document.getElementById('results');
-  function show(el){ [form,loading,error,results].forEach(function(x){ x.style.display='none'; }); el.style.display=(el===form||el===results)?'block':'block'; }
+  function show(el){ [form,loading,error,results].forEach(function(x){ x.style.display='none'; }); el.style.display='block'; }
   form.addEventListener('submit', async function(e){
     e.preventDefault();
     var query=document.getElementById('query').value.trim(), domain=document.getElementById('domain').value.trim(), email=document.getElementById('email').value.trim();
@@ -110,9 +150,9 @@
     }catch(err){ error.textContent='Network error — please try again.'; show(error); }
   });
   function render(d){
-    document.getElementById('r-query').textContent='"'+d.query+'"';
-    document.getElementById('r-biz').textContent='Checking for: '+d.domain;
-    document.getElementById('r-gap').textContent=d.inCount+' of '+d.total;
+    document.getElementById('r-query').textContent='“'+d.query+'”';
+    document.getElementById('r-biz').textContent='Checking for '+d.domain;
+    document.getElementById('r-gap').textContent=d.inCount+' / '+d.total;
     var host=document.getElementById('r-sources'); host.innerHTML='';
     d.sources.forEach(function(s,i){
       var div=document.createElement('div'); div.className='src';
@@ -122,7 +162,7 @@
       div.innerHTML='<div class="rank">'+(i+1)+'</div><div class="body"><div class="name"><a href="'+s.url+'" target="_blank" rel="noopener">'+(s.title||s.host)+'</a></div><div class="type">'+s.type+' · '+s.host+'</div>'+(engs?'<div class="engs">'+engs+'</div>':'')+'</div><span class="status '+cls+'">'+label+'</span>';
       host.appendChild(div);
     });
-    document.getElementById('r-cta-h').textContent = d.inCount===0 ? "You're invisible in every source AI cites." : "Here's your target list.";
+    document.getElementById('r-cta-h').textContent = d.inCount===0 ? "You're invisible in every source AI cites." : "This is your target list.";
     show(results);
   }
 </script>
