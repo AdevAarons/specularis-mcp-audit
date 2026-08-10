@@ -46,6 +46,8 @@
   .src .name{ font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .src .name a{ color:var(--ink); text-decoration:none; }
   .src .type{ color:var(--muted); font-size:12.5px; }
+  .engs{ display:flex; gap:5px; margin-top:5px; flex-wrap:wrap; }
+  .eng{ font-size:10.5px; font-weight:800; letter-spacing:.03em; padding:2px 7px; border-radius:20px; background:var(--wash); color:var(--blue); border:1px solid #d4e3ff; }
   .src .status{ font-size:12px; font-weight:800; padding:4px 10px; border-radius:20px; white-space:nowrap; }
   .st-no{ background:#fdecec; color:var(--red); } .st-yes{ background:#e9f9ef; color:var(--green); }
   .cta{ background:#fff; border:2px solid var(--blue); border-radius:16px; padding:24px; margin-top:26px; text-align:center; }
@@ -58,7 +60,7 @@
 <div class="wrap">
   <div class="brand">SPECULARIS</div>
   <h1>Where does AI get its answers <span class="accent">about your business?</span></h1>
-  <p class="lead">Enter the question your customers ask AI. We'll show you the exact sources ChatGPT and Perplexity pull their answer from — and whether your business is in any of them.</p>
+  <p class="lead">Enter the question your customers ask AI. We'll show you the exact sources ChatGPT, Perplexity, and Claude pull their answer from — and whether your business is in any of them.</p>
 
   <form id="form">
     <label>The question your customers ask AI <span class="hint">— be specific</span></label>
@@ -71,7 +73,7 @@
     <div class="micro">Free · takes about 20 seconds · no credit card</div>
   </form>
 
-  <div id="loading"><div class="spin"></div>Asking the AI engines and checking every source they cite…</div>
+  <div id="loading"><div class="spin"></div>Asking Perplexity and Claude, then checking every source they cite…</div>
   <div id="error"></div>
 
   <div id="results">
@@ -116,7 +118,8 @@
       var div=document.createElement('div'); div.className='src';
       var label = s.isYou ? "That's you" : (s.appearsYou ? "You're listed" : "Not listed");
       var cls = s.appearsYou ? "st-yes" : "st-no";
-      div.innerHTML='<div class="rank">'+(i+1)+'</div><div class="body"><div class="name"><a href="'+s.url+'" target="_blank" rel="noopener">'+(s.title||s.host)+'</a></div><div class="type">'+s.type+' · '+s.host+'</div></div><span class="status '+cls+'">'+label+'</span>';
+      var engs = (s.engines||[]).map(function(e){ return '<span class="eng">'+e+'</span>'; }).join('');
+      div.innerHTML='<div class="rank">'+(i+1)+'</div><div class="body"><div class="name"><a href="'+s.url+'" target="_blank" rel="noopener">'+(s.title||s.host)+'</a></div><div class="type">'+s.type+' · '+s.host+'</div>'+(engs?'<div class="engs">'+engs+'</div>':'')+'</div><span class="status '+cls+'">'+label+'</span>';
       host.appendChild(div);
     });
     document.getElementById('r-cta-h').textContent = d.inCount===0 ? "You're invisible in every source AI cites." : "Here's your target list.";

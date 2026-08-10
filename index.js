@@ -49,6 +49,7 @@ const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || "https://primary-producti
 const CONTACT_URL = process.env.CONTACT_URL || "https://specularisinc.com/contact";
 const AUDIT_URL = process.env.AUDIT_URL || "https://specularisinc.com/free-audit";
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || ""; // set in Railway Variables
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || ""; // set in Railway Variables — adds Claude as a 2nd engine in the citation finder
 const PORT = process.env.PORT || 3000;
 
 // ---- helpers ----
@@ -135,6 +136,50 @@ const callPerplexity = async (query) => {
     return await r.json();
   } catch (e) { return { error: "perplexity fetch failed" }; }
   finally { clearTimeout(t); }
+};
+
+// Ask Claude the same buyer query WITH web search on, so it returns the sources
+// it actually pulled its answer from — the Claude-side view of "where AI cites."
+const callClaude = async (query) => {
+  if (!ANTHROPIC_API_KEY) return null;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 45000);
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", signal: ctrl.signal,
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-opus-5",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: query }],
+        tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }],
+      }),
+    });
+    if (!r.ok) return { error: "claude " + r.status };
+    return await r.json();
+  } catch (e) { return { error: "claude fetch failed" }; }
+  finally { clearTimeout(t); }
+};
+
+// Pull cited sources out of a Claude Messages response: prefer the citations
+// attached to the answer text (what Claude actually referenced), and fall back
+// to the raw web_search results it retrieved.
+const extractClaudeSources = (data) => {
+  const out = [];
+  const content = Array.isArray(data?.content) ? data.content : [];
+  for (const block of content) {
+    if (block?.type === "text" && Array.isArray(block.citations)) {
+      for (const c of block.citations) if (c?.url) out.push({ url: c.url, title: c.title || "" });
+    }
+    if (block?.type === "web_search_tool_result" && Array.isArray(block.content)) {
+      for (const s of block.content) if (s?.type === "web_search_result" && s.url) out.push({ url: s.url, title: s.title || "" });
+    }
+  }
+  return out;
 };
 
 // server identity (surfaced in the MCP handshake + directory listings)
@@ -302,24 +347,41 @@ app.post("/citation-finder", async (req, res) => {
     const site = normalizeUrl(domain);
     const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
 
-    const data = await callPerplexity(String(query).slice(0, 300));
-    if (!data || data.error) return res.status(502).json({ error: data?.error || "AI query failed" });
+    const q = String(query).slice(0, 300);
+    // Query both engines in parallel — Perplexity is the baseline; Claude (with
+    // web search) is added when ANTHROPIC_API_KEY is set.
+    const [pplx, claude] = await Promise.all([callPerplexity(q), callClaude(q)]);
+    if ((!pplx || pplx.error) && (!claude || claude.error)) {
+      return res.status(502).json({ error: pplx?.error || claude?.error || "AI query failed" });
+    }
 
-    // extract cited sources (support both response shapes)
-    let raw = [];
-    if (Array.isArray(data.search_results)) raw = data.search_results.map((s) => ({ url: s.url, title: s.title || "" }));
-    else if (Array.isArray(data.citations)) raw = data.citations.map((u) => ({ url: u, title: "" }));
+    // extract cited sources per engine, tagging each with its origin
+    const raw = [];
+    if (pplx && !pplx.error) {
+      let p = [];
+      if (Array.isArray(pplx.search_results)) p = pplx.search_results.map((s) => ({ url: s.url, title: s.title || "" }));
+      else if (Array.isArray(pplx.citations)) p = pplx.citations.map((u) => ({ url: u, title: "" }));
+      for (const c of p) raw.push({ url: c.url, title: c.title, engine: "Perplexity" });
+    }
+    if (claude && !claude.error) {
+      for (const c of extractClaudeSources(claude)) raw.push({ url: c.url, title: c.title, engine: "Claude" });
+    }
 
-    // dedupe by host, cap at 10
-    const seen = new Set(); const sources = [];
+    // merge + dedupe by host (a source cited by both engines keeps both tags), cap at 12
+    const byHost = new Map();
     for (const c of raw) {
       if (!c.url) continue;
       const host = (String(c.url).match(/^https?:\/\/([^\/]+)/i)?.[1] || "").toLowerCase().replace(/^www\./, "");
-      if (!host || seen.has(host)) continue;
-      seen.add(host);
-      sources.push({ url: c.url, host, title: c.title, type: classifySource(c.url) });
-      if (sources.length >= 10) break;
+      if (!host) continue;
+      if (byHost.has(host)) {
+        const ex = byHost.get(host);
+        if (!ex.engines.includes(c.engine)) ex.engines.push(c.engine);
+        if (!ex.title && c.title) ex.title = c.title;
+      } else if (byHost.size < 12) {
+        byHost.set(host, { url: c.url, host, title: c.title, type: classifySource(c.url), engines: [c.engine] });
+      }
     }
+    const sources = [...byHost.values()];
 
     // presence check: does the user's domain appear in each cited source?
     await Promise.all(sources.map(async (s) => {
@@ -330,7 +392,11 @@ app.post("/citation-finder", async (req, res) => {
 
     const total = sources.length;
     const inCount = sources.filter((s) => s.appearsYou).length;
-    res.json({ query, domain: bare, answer: (data.choices?.[0]?.message?.content || "").slice(0, 1200), total, inCount, sources });
+    const enginesUsed = [];
+    if (pplx && !pplx.error) enginesUsed.push("Perplexity");
+    if (claude && !claude.error) enginesUsed.push("Claude");
+    const answer = (pplx && !pplx.error && pplx.choices?.[0]?.message?.content) || "";
+    res.json({ query, domain: bare, answer: answer.slice(0, 1200), total, inCount, engines: enginesUsed, sources });
   } catch (e) {
     res.status(500).json({ error: "internal error" });
   }
