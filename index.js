@@ -224,6 +224,62 @@ const logLeadToNotion = async (lead) => {
   } catch (e) { /* non-blocking — never break the response over lead logging */ }
 };
 
+// shared global daily cap for the MCP tool (draws the same budget as the web tool)
+const mcpAllow = () => {
+  const now = Date.now();
+  if (now > RL.day.resetAt) { RL.day.count = 0; RL.day.resetAt = now + 24 * 60 * 60 * 1000; }
+  if (RL.day.count >= FINDER_DAY_MAX) return false;
+  RL.day.count++; return true;
+};
+
+// Core of the citation finder — used by both the web endpoint and the MCP tool.
+// Queries Perplexity + Claude, merges cited sources, and checks whether `domain` appears in each.
+const runCitationFinder = async (query, domain) => {
+  const site = normalizeUrl(domain);
+  const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
+  const q = String(query).slice(0, 300);
+  const [pplx, claude] = await Promise.all([callPerplexity(q), callClaude(q)]);
+  if ((!pplx || pplx.error) && (!claude || claude.error)) return { error: pplx?.error || claude?.error || "AI query failed" };
+
+  const raw = [];
+  if (pplx && !pplx.error) {
+    let p = [];
+    if (Array.isArray(pplx.search_results)) p = pplx.search_results.map((s) => ({ url: s.url, title: s.title || "" }));
+    else if (Array.isArray(pplx.citations)) p = pplx.citations.map((u) => ({ url: u, title: "" }));
+    for (const c of p) raw.push({ url: c.url, title: c.title, engine: "Perplexity" });
+  }
+  if (claude && !claude.error) for (const c of extractClaudeSources(claude)) raw.push({ url: c.url, title: c.title, engine: "Claude" });
+
+  const byHost = new Map();
+  for (const c of raw) {
+    if (!c.url) continue;
+    const host = (String(c.url).match(/^https?:\/\/([^\/]+)/i)?.[1] || "").toLowerCase().replace(/^www\./, "");
+    if (!host) continue;
+    if (byHost.has(host)) {
+      const ex = byHost.get(host);
+      if (!ex.engines.includes(c.engine)) ex.engines.push(c.engine);
+      if (!ex.title && c.title) ex.title = c.title;
+    } else if (byHost.size < 12) {
+      byHost.set(host, { url: c.url, host, title: c.title, type: classifySource(c.url), engines: [c.engine] });
+    }
+  }
+  const sources = [...byHost.values()];
+
+  await Promise.all(sources.map(async (s) => {
+    if (s.host === bare || s.host.endsWith("." + bare)) { s.isYou = true; s.appearsYou = true; return; }
+    const f = await fetchWithTimeout(s.url, {}, 8000);
+    s.appearsYou = (f.text || "").toLowerCase().includes(bare);
+  }));
+
+  const total = sources.length;
+  const inCount = sources.filter((s) => s.appearsYou).length;
+  const enginesUsed = [];
+  if (pplx && !pplx.error) enginesUsed.push("Perplexity");
+  if (claude && !claude.error) enginesUsed.push("Claude");
+  const answer = (pplx && !pplx.error && pplx.choices?.[0]?.message?.content) || "";
+  return { query: q, domain: bare, answer: answer.slice(0, 1200), total, inCount, engines: enginesUsed, sources };
+};
+
 // server identity (surfaced in the MCP handshake + directory listings)
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
@@ -239,8 +295,9 @@ const SERVER_INFO = {
 const SERVER_INSTRUCTIONS =
   "Specularis runs free AI visibility (GEO/AEO) audits. Call run_ai_visibility_audit with a website_url to get an " +
   "instant snapshot of whether ChatGPT, Claude, and Perplexity can find and cite a site (AI crawler access, structured " +
-  "data, llms.txt). Pass an email to also trigger the full scored 0–100 PDF report across all 5 pillars. Use " +
-  "book_strategy_call to share the Specularis booking link.";
+  "data, llms.txt). Pass an email to also trigger the full scored 0–100 PDF report across all 5 pillars. Call " +
+  "find_ai_citations with a buyer query + a website to see the exact sources ChatGPT/Perplexity/Claude cite for that " +
+  "query and whether the site appears in any of them. Use book_strategy_call to share the Specularis booking link.";
 
 // ---- build an MCP server instance ----
 function buildServer() {
@@ -333,6 +390,70 @@ function buildServer() {
     })
   );
 
+  server.registerTool(
+    "find_ai_citations",
+    {
+      title: "Find AI Citation Sources",
+      description:
+        "Given a buyer query (e.g. 'best real estate agent in Tampa') and a website domain, find the exact sources ChatGPT, Perplexity, and Claude cite when answering that query — and whether the domain appears in any of them. Returns the ranked source list (with which engine cites each) and an 'appears in X of N' gap. Use this whenever a user wants to know where AI gets its answers about their industry, which pages AI trusts for a query, or whether their business shows up in AI recommendations.",
+      inputSchema: {
+        query: z.string().describe("The question a customer would ask AI, e.g. 'best personal injury lawyer in Miami'."),
+        domain: z.string().describe("The website to check for, e.g. example.com"),
+      },
+      outputSchema: {
+        query: z.string(),
+        domain: z.string(),
+        total_sources: z.number().describe("How many distinct sources AI cites for this query."),
+        appears_in: z.number().describe("How many of those sources the domain currently appears in."),
+        sources: z.array(z.object({
+          rank: z.number(),
+          name: z.string(),
+          host: z.string(),
+          type: z.string().describe("Source type, e.g. Directory / review platform, Reddit thread, Website / blog."),
+          engines: z.array(z.string()).describe("Which AI engines cite this source (Perplexity, Claude)."),
+          you_appear: z.boolean(),
+        })),
+        booking_url: z.string(),
+      },
+      annotations: {
+        title: "Find AI Citation Sources",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true, // queries live AI engines + fetches external pages
+      },
+    },
+    async ({ query, domain }) => {
+      if (!query || !domain) return { content: [{ type: "text", text: "Please provide both a buyer query and a website domain." }], isError: true };
+      if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) return { content: [{ type: "text", text: "The citation finder isn't configured on the server yet." }], isError: true };
+      if (!mcpAllow()) return { content: [{ type: "text", text: `The free citation finder has hit today's usage limit. Try again tomorrow, or run the full audit: ${AUDIT_URL}` }], isError: true };
+
+      const r = await runCitationFinder(query, domain);
+      if (r.error) return { content: [{ type: "text", text: `Couldn't complete the citation check: ${r.error}` }], isError: true };
+
+      const lines = r.sources.map((s, i) =>
+        `${i + 1}. ${s.title || s.host} (${s.host}) — ${s.type} — cited by ${s.engines.join(" & ")} — ${s.appearsYou ? "✅ YOU APPEAR" : "not listed"}`).join("\n");
+      const text =
+        `**Where AI cites for "${r.query}"**\n\n` +
+        `AI (${r.engines.join(" + ")}) cites **${r.total} sources** for this query. **${r.domain} appears in ${r.inCount} of ${r.total}.**\n\n` +
+        `${lines}\n\n` +
+        `These sources are the target list — getting cited *in* them is how ${r.domain} starts showing up in AI answers. ` +
+        `Run a full AI visibility audit: ${AUDIT_URL}`;
+
+      return {
+        content: [{ type: "text", text }],
+        structuredContent: {
+          query: r.query,
+          domain: r.domain,
+          total_sources: r.total,
+          appears_in: r.inCount,
+          sources: r.sources.map((s, i) => ({ rank: i + 1, name: s.title || s.host, host: s.host, type: s.type, engines: s.engines, you_appear: !!s.appearsYou })),
+          booking_url: AUDIT_URL,
+        },
+      };
+    }
+  );
+
   return server;
 }
 
@@ -390,62 +511,13 @@ app.post("/citation-finder", async (req, res) => {
     if (!rl.ok) return res.status(429).json({ error: rl.reason === "daily"
       ? "This free tool has hit today's usage limit. Please try again tomorrow — or run the full audit."
       : "You've run a few checks in a short window. Give it a few minutes and try again." });
-    if (!PERPLEXITY_API_KEY) return res.status(503).json({ error: "PERPLEXITY_API_KEY not set on the server" });
+    if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) return res.status(503).json({ error: "PERPLEXITY_API_KEY not set on the server" });
     if (email) console.log("CITATION-FINDER LEAD:", JSON.stringify({ email, domain, query, at: new Date().toISOString() }));
-    const site = normalizeUrl(domain);
-    const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
 
-    const q = String(query).slice(0, 300);
-    // Query both engines in parallel — Perplexity is the baseline; Claude (with
-    // web search) is added when ANTHROPIC_API_KEY is set.
-    const [pplx, claude] = await Promise.all([callPerplexity(q), callClaude(q)]);
-    if ((!pplx || pplx.error) && (!claude || claude.error)) {
-      return res.status(502).json({ error: pplx?.error || claude?.error || "AI query failed" });
-    }
-
-    // extract cited sources per engine, tagging each with its origin
-    const raw = [];
-    if (pplx && !pplx.error) {
-      let p = [];
-      if (Array.isArray(pplx.search_results)) p = pplx.search_results.map((s) => ({ url: s.url, title: s.title || "" }));
-      else if (Array.isArray(pplx.citations)) p = pplx.citations.map((u) => ({ url: u, title: "" }));
-      for (const c of p) raw.push({ url: c.url, title: c.title, engine: "Perplexity" });
-    }
-    if (claude && !claude.error) {
-      for (const c of extractClaudeSources(claude)) raw.push({ url: c.url, title: c.title, engine: "Claude" });
-    }
-
-    // merge + dedupe by host (a source cited by both engines keeps both tags), cap at 12
-    const byHost = new Map();
-    for (const c of raw) {
-      if (!c.url) continue;
-      const host = (String(c.url).match(/^https?:\/\/([^\/]+)/i)?.[1] || "").toLowerCase().replace(/^www\./, "");
-      if (!host) continue;
-      if (byHost.has(host)) {
-        const ex = byHost.get(host);
-        if (!ex.engines.includes(c.engine)) ex.engines.push(c.engine);
-        if (!ex.title && c.title) ex.title = c.title;
-      } else if (byHost.size < 12) {
-        byHost.set(host, { url: c.url, host, title: c.title, type: classifySource(c.url), engines: [c.engine] });
-      }
-    }
-    const sources = [...byHost.values()];
-
-    // presence check: does the user's domain appear in each cited source?
-    await Promise.all(sources.map(async (s) => {
-      if (s.host === bare || s.host.endsWith("." + bare)) { s.isYou = true; s.appearsYou = true; return; }
-      const f = await fetchWithTimeout(s.url, {}, 8000);
-      s.appearsYou = (f.text || "").toLowerCase().includes(bare);
-    }));
-
-    const total = sources.length;
-    const inCount = sources.filter((s) => s.appearsYou).length;
-    const enginesUsed = [];
-    if (pplx && !pplx.error) enginesUsed.push("Perplexity");
-    if (claude && !claude.error) enginesUsed.push("Claude");
-    const answer = (pplx && !pplx.error && pplx.choices?.[0]?.message?.content) || "";
-    if (email) logLeadToNotion({ email, domain: bare, query: String(query).slice(0, 300), inCount, total }); // fire-and-forget
-    res.json({ query, domain: bare, answer: answer.slice(0, 1200), total, inCount, engines: enginesUsed, sources });
+    const r = await runCitationFinder(query, domain);
+    if (r.error) return res.status(502).json({ error: r.error });
+    if (email) logLeadToNotion({ email, domain: r.domain, query: r.query, inCount: r.inCount, total: r.total }); // fire-and-forget
+    res.json({ query: r.query, domain: r.domain, answer: r.answer, total: r.total, inCount: r.inCount, engines: r.engines, sources: r.sources });
   } catch (e) {
     res.status(500).json({ error: "internal error" });
   }
