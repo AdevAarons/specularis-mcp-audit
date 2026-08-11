@@ -150,7 +150,12 @@
     try{
       var res=await fetch('/citation-finder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:query,domain:domain,email:email})});
       var data=await res.json();
-      if(!res.ok||data.error){ error.textContent = data.error==='PERPLEXITY_API_KEY not set on the server' ? 'The tool is being set up — check back shortly.' : ('Something went wrong: '+(data.error||res.status)); show(error); return; }
+      if(!res.ok||data.error){
+        if(data.error==='PERPLEXITY_API_KEY not set on the server') error.textContent='The tool is being set up — check back shortly.';
+        else if(res.status===429) error.textContent=data.error;
+        else error.textContent='Something went wrong: '+(data.error||res.status);
+        show(error); return;
+      }
       render(data);
     }catch(err){ error.textContent='Network error — please try again.'; show(error); }
   });

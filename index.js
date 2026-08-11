@@ -50,6 +50,12 @@ const CONTACT_URL = process.env.CONTACT_URL || "https://specularisinc.com/contac
 const AUDIT_URL = process.env.AUDIT_URL || "https://specularisinc.com/free-audit";
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || ""; // set in Railway Variables
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || ""; // set in Railway Variables — adds Claude as a 2nd engine in the citation finder
+const NOTION_TOKEN = process.env.NOTION_TOKEN || "";       // Notion internal-integration token — logs finder leads
+const NOTION_LEADS_DB = process.env.NOTION_LEADS_DB || ""; // Notion database id that receives finder leads
+// finder rate limits (cost guard for the public tool)
+const FINDER_IP_MAX = Number(process.env.FINDER_IP_MAX || 6);                    // requests per IP per window
+const FINDER_IP_WINDOW_MS = Number(process.env.FINDER_IP_WINDOW_MS || 15 * 60 * 1000); // 15 min
+const FINDER_DAY_MAX = Number(process.env.FINDER_DAY_MAX || 250);                // global runs per day
 const PORT = process.env.PORT || 3000;
 
 // ---- helpers ----
@@ -182,6 +188,42 @@ const extractClaudeSources = (data) => {
   return out;
 };
 
+// ---- rate limiting (in-memory; single Railway instance) ----
+const RL = { perIp: new Map(), day: { count: 0, resetAt: 0 } };
+const rateLimitFinder = (ip) => {
+  const now = Date.now();
+  if (now > RL.day.resetAt) { RL.day.count = 0; RL.day.resetAt = now + 24 * 60 * 60 * 1000; }
+  if (RL.day.count >= FINDER_DAY_MAX) return { ok: false, reason: "daily" };
+  if (RL.perIp.size > 5000) { for (const [k, v] of RL.perIp) if (now > v.resetAt) RL.perIp.delete(k); } // prune
+  let e = RL.perIp.get(ip);
+  if (!e || now > e.resetAt) { e = { count: 0, resetAt: now + FINDER_IP_WINDOW_MS }; RL.perIp.set(ip, e); }
+  if (e.count >= FINDER_IP_MAX) return { ok: false, reason: "ip" };
+  e.count++; RL.day.count++;
+  return { ok: true };
+};
+
+// ---- Notion lead logging (no-op until NOTION_TOKEN + NOTION_LEADS_DB are set) ----
+const logLeadToNotion = async (lead) => {
+  if (!NOTION_TOKEN || !NOTION_LEADS_DB) return;
+  const t = (s) => [{ text: { content: String(s || "").slice(0, 1900) } }];
+  try {
+    await fetch("https://api.notion.com/v1/pages", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + NOTION_TOKEN, "Notion-Version": "2022-06-28", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parent: { database_id: NOTION_LEADS_DB },
+        properties: {
+          "Email": { title: t(lead.email) },
+          "Website": { rich_text: t(lead.domain) },
+          "Query": { rich_text: t(lead.query) },
+          "Result": { rich_text: t(lead.inCount != null ? lead.inCount + " / " + lead.total : "") },
+          "Source": { select: { name: "AI Citation Finder" } },
+        },
+      }),
+    });
+  } catch (e) { /* non-blocking — never break the response over lead logging */ }
+};
+
 // server identity (surfaced in the MCP handshake + directory listings)
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
@@ -296,6 +338,7 @@ function buildServer() {
 
 // ---- Streamable HTTP transport (stateless) ----
 const app = express();
+app.set("trust proxy", true); // Railway sits behind a proxy — trust X-Forwarded-For for real client IPs
 app.use(express.json());
 
 app.get("/", (_req, res) => res.json({ name: "specularis-ai-visibility-audit", status: "ok", mcp: "/mcp" }));
@@ -342,6 +385,11 @@ app.post("/citation-finder", async (req, res) => {
   try {
     const { query, domain, email } = req.body || {};
     if (!query || !domain) return res.status(400).json({ error: "query and domain are required" });
+    const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
+    const rl = rateLimitFinder(ip);
+    if (!rl.ok) return res.status(429).json({ error: rl.reason === "daily"
+      ? "This free tool has hit today's usage limit. Please try again tomorrow — or run the full audit."
+      : "You've run a few checks in a short window. Give it a few minutes and try again." });
     if (!PERPLEXITY_API_KEY) return res.status(503).json({ error: "PERPLEXITY_API_KEY not set on the server" });
     if (email) console.log("CITATION-FINDER LEAD:", JSON.stringify({ email, domain, query, at: new Date().toISOString() }));
     const site = normalizeUrl(domain);
@@ -396,6 +444,7 @@ app.post("/citation-finder", async (req, res) => {
     if (pplx && !pplx.error) enginesUsed.push("Perplexity");
     if (claude && !claude.error) enginesUsed.push("Claude");
     const answer = (pplx && !pplx.error && pplx.choices?.[0]?.message?.content) || "";
+    if (email) logLeadToNotion({ email, domain: bare, query: String(query).slice(0, 300), inCount, total }); // fire-and-forget
     res.json({ query, domain: bare, answer: answer.slice(0, 1200), total, inCount, engines: enginesUsed, sources });
   } catch (e) {
     res.status(500).json({ error: "internal error" });
