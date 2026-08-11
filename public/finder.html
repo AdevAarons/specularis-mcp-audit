@@ -74,6 +74,7 @@
   .src .name a{ color:var(--ink); text-decoration:none; }
   .src .name a:hover{ color:var(--link); }
   .src .type{ color:var(--muted); font-size:12.5px; margin-top:3px; }
+  .src .name, .src .type{ overflow-wrap:anywhere; word-break:break-word; }
   .engs{ display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
   .eng{ font-size:10.5px; font-weight:700; letter-spacing:.02em; padding:2px 8px; border-radius:5px; background:var(--wash); color:var(--blue-dk); }
   .src .status{ font-size:11.5px; font-weight:700; padding:4px 11px; border-radius:20px; white-space:nowrap; flex-shrink:0; margin-top:1px; }
@@ -86,6 +87,27 @@
   .btn:hover{ background:var(--blue-dk); }
   .restart{ display:block; text-align:center; margin-top:24px; color:var(--muted); font-size:13.5px; background:none; border:0; cursor:pointer; width:100%; font-family:inherit; }
   .restart:hover{ color:var(--sec); }
+
+  html, body{ max-width:100%; overflow-x:hidden; }
+  img{ max-width:100%; height:auto; }
+
+  /* phones */
+  @media (max-width:520px){
+    .wrap{ padding:26px 15px 64px; }
+    h1{ font-size:26px; margin-top:16px; }
+    .lead{ font-size:15.5px; margin-bottom:26px; }
+    form{ padding:20px 16px 22px; border-radius:16px; }
+    .field{ margin-bottom:15px; }
+    .gap{ padding:24px 16px; border-radius:16px; }
+    .gap .big{ font-size:46px; }
+    .gap .sub{ font-size:14px; }
+    .recap .q{ font-size:18px; }
+    .src{ padding:13px 13px; gap:11px; }
+    .src .name{ font-size:15px; }
+    .cta{ padding:24px 18px; border-radius:16px; }
+    .cta h3{ font-size:20px; }
+    .btn{ padding:14px 24px; }
+  }
 </style>
 </head>
 <body>
