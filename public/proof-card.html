@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Specularis — proof card</title>
+<style>
+  :root{ --blue:#2467E3; --blue-lt:#5b8dff; --ink:#0f1114; --muted:#8a929c; --line:#232a33; --up:#3fb96b; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:#eef1f6; font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; padding:24px; display:flex; justify-content:center; }
+
+  /* 1200x675 — LinkedIn landscape. Screenshot this card. */
+  .card{ width:1200px; max-width:100%; aspect-ratio:16/9; background:var(--ink); color:#e8ebf0;
+    border-radius:18px; padding:46px 52px; display:flex; flex-direction:column; position:relative; overflow:hidden; }
+  @media(max-width:900px){ .card{ aspect-ratio:auto; padding:30px 26px; } }
+
+  .top{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .eyebrow{ font-size:14px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--blue-lt); }
+  .client{ font-size:30px; font-weight:800; letter-spacing:-.02em; margin-top:8px; }
+  .brand{ font-size:13px; font-weight:800; letter-spacing:.18em; color:var(--muted); text-align:right; }
+
+  .headline{ display:flex; align-items:baseline; gap:18px; margin:26px 0 6px; flex-wrap:wrap; }
+  .big{ font-size:76px; font-weight:800; line-height:1; letter-spacing:-.03em; }
+  .big .from{ color:#6b7280; }
+  .big .arrow{ color:var(--muted); font-size:44px; padding:0 6px; }
+  .big .to{ color:var(--up); }
+  .headline .unit{ font-size:20px; color:var(--muted); font-weight:600; }
+  .sub{ font-size:17px; color:#aeb6c2; margin-bottom:10px; }
+
+  .chartwrap{ flex:1; min-height:210px; margin-top:6px; }
+  svg{ width:100%; height:100%; overflow:visible; }
+
+  .foot{ display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding-top:16px; border-top:1px solid var(--line); font-size:13.5px; color:var(--muted); }
+  .foot b{ color:#e8ebf0; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="top">
+      <div>
+        <div class="eyebrow">AI Visibility Result</div>
+        <div class="client" id="clientName">A Tampa Real Estate Agent</div>
+      </div>
+      <div class="brand">SPECULARIS</div>
+    </div>
+
+    <div class="headline">
+      <div class="big"><span class="from" id="fromVal">0</span><span class="arrow">→</span><span class="to" id="toVal">6</span></div>
+      <div class="unit">of <span id="totalVal">8</span> AI answers now name them</div>
+    </div>
+    <div class="sub" id="subLine">We asked ChatGPT, Claude, Perplexity &amp; Google AI the 8 questions their buyers actually ask.</div>
+
+    <div class="chartwrap"><svg id="chart" viewBox="0 0 1000 300" preserveAspectRatio="none"></svg></div>
+
+    <div class="foot">
+      <div>Measured monthly across 4 AI engines · <b id="periodLabel">90 days</b></div>
+      <div>specularisinc.com</div>
+    </div>
+  </div>
+
+<script>
+// ─── EDIT THESE ────────────────────────────────────────────────
+const DATA = {
+  client: "A Tampa Real Estate Agent",   // or the real name, with permission
+  total: 8,                               // number of target queries tested
+  months: ["Month 0","Month 1","Month 2","Month 3"],
+  hits:   [0, 1, 4, 6],                   // how many queries named them, per month
+  startIndex: 0,                          // which point marks "engagement started"
+  period: "90 days"
+};
+// ───────────────────────────────────────────────────────────────
+
+document.getElementById('clientName').textContent = DATA.client;
+document.getElementById('fromVal').textContent = DATA.hits[0];
+document.getElementById('toVal').textContent = DATA.hits[DATA.hits.length-1];
+document.getElementById('totalVal').textContent = DATA.total;
+document.getElementById('periodLabel').textContent = DATA.period;
+
+(function draw(){
+  const svg = document.getElementById('chart');
+  const W = 1000, H = 300, padL = 40, padR = 30, padT = 20, padB = 42;
+  const n = DATA.hits.length;
+  const maxY = Math.max(DATA.total, ...DATA.hits);
+  const x = i => padL + (i * (W - padL - padR)) / (n - 1);
+  const y = v => padT + (H - padT - padB) * (1 - v / maxY);
+  let out = '';
+
+  // horizontal gridlines
+  for (let g = 0; g <= 4; g++){
+    const gy = padT + (H - padT - padB) * (g/4);
+    out += `<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#232a33" stroke-width="1"/>`;
+  }
+
+  // area fill under the line
+  let area = `M ${x(0)} ${y(DATA.hits[0])}`;
+  DATA.hits.forEach((v,i)=>{ if(i) area += ` L ${x(i)} ${y(v)}`; });
+  area += ` L ${x(n-1)} ${H-padB} L ${x(0)} ${H-padB} Z`;
+  out += `<path d="${area}" fill="url(#grad)"/>`;
+  out += `<defs><linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#3fb96b" stop-opacity=".38"/>
+    <stop offset="100%" stop-color="#3fb96b" stop-opacity="0"/></linearGradient></defs>`;
+
+  // the line
+  let line = `M ${x(0)} ${y(DATA.hits[0])}`;
+  DATA.hits.forEach((v,i)=>{ if(i) line += ` L ${x(i)} ${y(v)}`; });
+  out += `<path d="${line}" fill="none" stroke="#3fb96b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+  // engagement start marker
+  const sx = x(DATA.startIndex);
+  out += `<line x1="${sx}" y1="${padT-10}" x2="${sx}" y2="${H-padB}" stroke="#5b8dff" stroke-width="2" stroke-dasharray="6 5"/>`;
+  out += `<text x="${sx+10}" y="${padT+2}" fill="#5b8dff" font-size="15" font-weight="700" font-family="Inter,Arial">Specularis starts</text>`;
+
+  // points + value labels
+  DATA.hits.forEach((v,i)=>{
+    out += `<circle cx="${x(i)}" cy="${y(v)}" r="6" fill="#0f1114" stroke="#3fb96b" stroke-width="3"/>`;
+    out += `<text x="${x(i)}" y="${y(v)-16}" fill="#e8ebf0" font-size="17" font-weight="800" text-anchor="middle" font-family="Inter,Arial">${v}</text>`;
+  });
+
+  // x labels
+  DATA.months.forEach((m,i)=>{
+    out += `<text x="${x(i)}" y="${H-14}" fill="#8a929c" font-size="14" text-anchor="middle" font-family="Inter,Arial">${m}</text>`;
+  });
+
+  svg.innerHTML = out;
+})();
+</script>
+</body>
+</html>

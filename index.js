@@ -34,6 +34,8 @@ let ADDONS_SWITCHER_HTML = "";
 try { ADDONS_SWITCHER_HTML = readFileSync(join(__dirname, "public", "addons-switcher.html"), "utf8"); } catch (e) {}
 let STATS_BAR_HTML = "";
 try { STATS_BAR_HTML = readFileSync(join(__dirname, "public", "stats-bar.html"), "utf8"); } catch (e) {}
+let PROOF_CARD_HTML = "";
+try { PROOF_CARD_HTML = readFileSync(join(__dirname, "public", "proof-card.html"), "utf8"); } catch (e) {}
 let PRICING_SWITCHER_HTML = "";
 try { PRICING_SWITCHER_HTML = readFileSync(join(__dirname, "public", "pricing-switcher.html"), "utf8"); } catch (e) {}
 // Brand assets (served for schema logo/image + og); binary buffers loaded once
@@ -533,6 +535,12 @@ app.get("/addons-switcher", (_req, res) => {
 app.get("/stats-bar", (_req, res) => {
   if (!STATS_BAR_HTML) return res.status(404).send("Not found");
   res.type("html").send(STATS_BAR_HTML);
+});
+
+// Social-proof result card (screenshot for LinkedIn)
+app.get("/proof-card", (_req, res) => {
+  if (!PROOF_CARD_HTML) return res.status(404).send("Not found");
+  res.type("html").send(PROOF_CARD_HTML);
 });
 
 // Pricing plan switcher (Local / Enterprise) — embedded by URL
