@@ -34,6 +34,8 @@ let ADDONS_SWITCHER_HTML = "";
 try { ADDONS_SWITCHER_HTML = readFileSync(join(__dirname, "public", "addons-switcher.html"), "utf8"); } catch (e) {}
 let STATS_BAR_HTML = "";
 try { STATS_BAR_HTML = readFileSync(join(__dirname, "public", "stats-bar.html"), "utf8"); } catch (e) {}
+let DASHBOARD_HTML = "";
+try { DASHBOARD_HTML = readFileSync(join(__dirname, "public", "dashboard.html"), "utf8"); } catch (e) {}
 let PROOF_CARD_HTML = "";
 try { PROOF_CARD_HTML = readFileSync(join(__dirname, "public", "proof-card.html"), "utf8"); } catch (e) {}
 let PRICING_SWITCHER_HTML = "";
@@ -535,6 +537,14 @@ app.get("/addons-switcher", (_req, res) => {
 app.get("/stats-bar", (_req, res) => {
   if (!STATS_BAR_HTML) return res.status(404).send("Not found");
   res.type("html").send(STATS_BAR_HTML);
+});
+
+// Internal client results dashboard — password-gated via ?k= or DASHBOARD_KEY env
+app.get("/dashboard", (req, res) => {
+  const key = process.env.DASHBOARD_KEY || "";
+  if (key && req.query.k !== key) return res.status(401).send("Unauthorized");
+  if (!DASHBOARD_HTML) return res.status(404).send("Not found");
+  res.type("html").send(DASHBOARD_HTML);
 });
 
 // Social-proof result card (screenshot for LinkedIn)

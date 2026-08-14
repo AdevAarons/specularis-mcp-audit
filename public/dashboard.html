@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Specularis — Client Results Dashboard</title>
+<style>
+  :root{ --blue:#2467E3; --blue-lt:#5b8dff; --bg:#0f1114; --panel:#171b21; --line:#232a33; --ink:#e8ebf0; --muted:#8a929c; --up:#3fb96b; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--bg); color:var(--ink); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.5; padding:26px 22px 60px; }
+  .wrap{ max-width:1180px; margin:0 auto; }
+
+  header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:26px; flex-wrap:wrap; gap:12px; }
+  .brand{ font-weight:800; letter-spacing:.18em; color:var(--blue-lt); font-size:14px; }
+  h1{ font-size:24px; font-weight:800; letter-spacing:-.02em; margin-top:4px; }
+  .demo{ background:#3a2a12; color:#e0a45c; font-size:12px; font-weight:800; padding:6px 13px; border-radius:20px; }
+
+  /* client selector */
+  .clients{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:24px; }
+  .cbtn{ border:0; background:#1c222a; color:#aeb6c2; font:inherit; font-size:13.5px; font-weight:700; padding:9px 16px; border-radius:24px; cursor:pointer; }
+  .cbtn.active{ background:var(--blue); color:#fff; }
+
+  .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:18px; }
+  @media(max-width:860px){ .grid{ grid-template-columns:1fr; } }
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px 22px; }
+  .src{ font-size:11px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; gap:7px; }
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--blue-lt); display:inline-block; }
+  .metric{ font-size:38px; font-weight:800; line-height:1.1; margin:12px 0 2px; letter-spacing:-.02em; }
+  .metric .of{ font-size:17px; color:var(--muted); font-weight:700; }
+  .delta{ font-size:14px; font-weight:800; color:var(--up); }
+  .base{ font-size:12.5px; color:var(--muted); margin-top:8px; }
+
+  .chartcard{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px 24px; }
+  .chartcard h2{ font-size:15px; font-weight:800; margin-bottom:4px; }
+  .chartcard p{ font-size:13px; color:var(--muted); margin-bottom:14px; }
+  svg{ width:100%; height:260px; overflow:visible; }
+  .legend{ display:flex; gap:18px; flex-wrap:wrap; margin-top:12px; font-size:12.5px; color:var(--muted); }
+  .legend i{ width:11px; height:3px; border-radius:2px; display:inline-block; margin-right:6px; vertical-align:middle; }
+
+  footer{ margin-top:22px; color:var(--muted); font-size:12.5px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand">SPECULARIS</div>
+      <h1>Client Results Dashboard</h1>
+    </div>
+    <div class="demo">SAMPLE DATA — not real clients</div>
+  </header>
+
+  <div class="clients" id="clients"></div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="src"><span class="dot"></span>Specularis · own data</div>
+      <div class="metric" id="mCite">6<span class="of"> / 8</span></div>
+      <div class="delta" id="dCite">+6 queries</div>
+      <div class="base">AI answers naming the client · baseline <span id="bCite">0 / 8</span></div>
+    </div>
+    <div class="panel">
+      <div class="src"><span class="dot" style="background:#f5a524"></span>Google Analytics · AI Search channel</div>
+      <div class="metric" id="mGa">128</div>
+      <div class="delta" id="dGa">+128 sessions</div>
+      <div class="base">Sessions from ChatGPT / Perplexity / Claude · baseline <span id="bGa">0</span></div>
+    </div>
+    <div class="panel">
+      <div class="src"><span class="dot" style="background:#3fb96b"></span>Semrush · AI Visibility</div>
+      <div class="metric" id="mSem">34<span class="of">%</span></div>
+      <div class="delta" id="dSem">+34 pts</div>
+      <div class="base">Independent AI visibility score · baseline <span id="bSem">0%</span></div>
+    </div>
+  </div>
+
+  <div class="chartcard">
+    <h2>Three independent sources, one inflection</h2>
+    <p>Each line is measured by a different party. The dashed marker is when the engagement started.</p>
+    <svg id="chart" viewBox="0 0 1000 260" preserveAspectRatio="none"></svg>
+    <div class="legend">
+      <span><i style="background:#5b8dff"></i>Specularis — AI citations (of 8)</span>
+      <span><i style="background:#f5a524"></i>GA4 — AI referral sessions</span>
+      <span><i style="background:#3fb96b"></i>Semrush — AI visibility %</span>
+    </div>
+  </div>
+
+  <footer>Data sources: Specularis audit engine · Google Analytics 4 Data API · Semrush AI Toolkit — replace sample data when live.</footer>
+</div>
+
+<script>
+// ─── SAMPLE DATA — replace with real pulls ─────────────────────
+const CLIENTS = {
+  "Tampa Realtor": {
+    months: ["M0","M1","M2","M3"],
+    citations: [0,1,4,6], citationsOf: 8,
+    gaSessions: [0,9,54,128],
+    semrush:    [0,6,19,34]
+  },
+  "Denver PI Attorney": {
+    months: ["M0","M1","M2","M3"],
+    citations: [1,2,3,5], citationsOf: 8,
+    gaSessions: [3,14,38,86],
+    semrush:    [4,11,20,29]
+  }
+};
+// ───────────────────────────────────────────────────────────────
+
+let current = Object.keys(CLIENTS)[0];
+
+function renderClients(){
+  document.getElementById('clients').innerHTML = Object.keys(CLIENTS).map(n =>
+    `<button class="cbtn ${n===current?'active':''}" data-c="${n}">${n}</button>`).join('');
+  document.querySelectorAll('.cbtn').forEach(b => b.onclick = () => { current = b.dataset.c; render(); });
+}
+
+function render(){
+  const d = CLIENTS[current];
+  const last = a => a[a.length-1], first = a => a[0];
+  document.getElementById('mCite').innerHTML = last(d.citations)+'<span class="of"> / '+d.citationsOf+'</span>';
+  document.getElementById('dCite').textContent = '+'+(last(d.citations)-first(d.citations))+' queries';
+  document.getElementById('bCite').textContent = first(d.citations)+' / '+d.citationsOf;
+  document.getElementById('mGa').textContent = last(d.gaSessions);
+  document.getElementById('dGa').textContent = '+'+(last(d.gaSessions)-first(d.gaSessions))+' sessions';
+  document.getElementById('bGa').textContent = first(d.gaSessions);
+  document.getElementById('mSem').innerHTML = last(d.semrush)+'<span class="of">%</span>';
+  document.getElementById('dSem').textContent = '+'+(last(d.semrush)-first(d.semrush))+' pts';
+  document.getElementById('bSem').textContent = first(d.semrush)+'%';
+  renderClients(); drawChart(d);
+}
+
+function drawChart(d){
+  const W=1000,H=260,padL=34,padR=24,padT=18,padB=34, n=d.months.length;
+  const x = i => padL + i*(W-padL-padR)/(n-1);
+  // normalize each series to 0-100 so three different units share one axis
+  const norm = arr => { const m = Math.max(...arr,1); return arr.map(v => v/m*100); };
+  const series = [
+    { c:'#5b8dff', v:norm(d.citations) },
+    { c:'#f5a524', v:norm(d.gaSessions) },
+    { c:'#3fb96b', v:norm(d.semrush) }
+  ];
+  const y = p => padT + (H-padT-padB)*(1-p/100);
+  let out='';
+  for(let g=0;g<=4;g++){ const gy=padT+(H-padT-padB)*(g/4);
+    out += `<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#232a33" stroke-width="1"/>`; }
+  // engagement marker at M0
+  out += `<line x1="${x(0)}" y1="${padT-8}" x2="${x(0)}" y2="${H-padB}" stroke="#5b8dff" stroke-width="2" stroke-dasharray="6 5"/>`;
+  out += `<text x="${x(0)+9}" y="${padT+1}" fill="#5b8dff" font-size="13" font-weight="700" font-family="Inter,Arial">engagement starts</text>`;
+  series.forEach(s=>{
+    let p = `M ${x(0)} ${y(s.v[0])}`;
+    s.v.forEach((v,i)=>{ if(i) p += ` L ${x(i)} ${y(v)}`; });
+    out += `<path d="${p}" fill="none" stroke="${s.c}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    s.v.forEach((v,i)=>{ out += `<circle cx="${x(i)}" cy="${y(v)}" r="4.5" fill="#0f1114" stroke="${s.c}" stroke-width="2.5"/>`; });
+  });
+  d.months.forEach((m,i)=>{ out += `<text x="${x(i)}" y="${H-10}" fill="#8a929c" font-size="12.5" text-anchor="middle" font-family="Inter,Arial">${m}</text>`; });
+  document.getElementById('chart').innerHTML = out;
+}
+
+render();
+</script>
+</body>
+</html>
