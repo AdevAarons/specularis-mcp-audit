@@ -40,6 +40,8 @@ let PROOF_CARD_HTML = "";
 try { PROOF_CARD_HTML = readFileSync(join(__dirname, "public", "proof-card.html"), "utf8"); } catch (e) {}
 let PRICING_SWITCHER_HTML = "";
 try { PRICING_SWITCHER_HTML = readFileSync(join(__dirname, "public", "pricing-switcher.html"), "utf8"); } catch (e) {}
+let SAVAGE_FLIGHT_HTML = "";
+try { SAVAGE_FLIGHT_HTML = readFileSync(join(__dirname, "public", "savage-flight.html"), "utf8"); } catch (e) {}
 // Brand assets (served for schema logo/image + og); binary buffers loaded once
 let LOGO_PNG = null, HEADSHOT_PNG = null;
 try { LOGO_PNG = readFileSync(join(__dirname, "public", "assets", "specularis-logo.png")); } catch (e) {}
@@ -479,6 +481,12 @@ app.get("/sample-report", (_req, res) => {
 app.get("/hero-preview", (_req, res) => {
   if (!HERO_PREVIEW_HTML) return res.status(404).send("Not found");
   res.type("html").send(HERO_PREVIEW_HTML);
+});
+
+// Client scoreboard — Savage Flight (self-contained; shareable + embeddable)
+app.get("/savage-flight", (_req, res) => {
+  if (!SAVAGE_FLIGHT_HTML) return res.status(404).send("Not found");
+  res.type("html").send(SAVAGE_FLIGHT_HTML);
 });
 
 // Copy-source for restoring the Tampa study article body into the Framer CMS
