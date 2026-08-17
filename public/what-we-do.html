@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Specularis — what we do</title>
+<style>
+  :root{ --blue:#2467E3; --blue-lt:#5b8dff; --ink:#161616; --card:#161616; --muted:#9aa3ae; --line:#2a3038; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:transparent; font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.5; padding:14px 16px 28px; }
+  .wrap{ max-width:1120px; margin:0 auto; }
+  .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+  @media(max-width:900px){ .grid{ grid-template-columns:1fr; } }
+
+  .card{ background:var(--card); color:#fff; border-radius:20px; padding:32px 28px 28px; display:flex; flex-direction:column;
+    transition:transform .18s ease, box-shadow .18s ease; }
+  .card:hover{ transform:translateY(-4px); box-shadow:0 18px 44px rgba(20,20,40,.22); }
+
+  .ic{ width:52px; height:52px; border-radius:14px; background:rgba(91,141,255,.14); display:flex; align-items:center; justify-content:center; margin-bottom:18px; }
+  .ic svg{ width:27px; height:27px; stroke:var(--blue-lt); fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+
+  h3{ font-size:21px; font-weight:800; letter-spacing:-.015em; margin-bottom:9px; }
+  p{ color:var(--muted); font-size:14.5px; margin-bottom:20px; }
+
+  .lbl{ font-size:10.5px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#6f7885; margin-bottom:10px; }
+  .tags{ display:flex; flex-wrap:wrap; gap:7px; margin-top:auto; }
+  .tag{ font-size:12.5px; font-weight:600; color:#d7dde5; background:#20262e; border:1px solid var(--line); padding:6px 11px; border-radius:20px; white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="grid">
+
+    <div class="card">
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/><path d="M11 8.2v5.6M8.2 11h5.6"/></svg></div>
+      <h3>GEO / AEO Optimization</h3>
+      <p>We make your site readable and quotable by the AI engines your buyers actually ask. Clean structure, schema and crawler access, so you show up in the answer instead of the footnotes.</p>
+      <div class="lbl">Where you show up</div>
+      <div class="tags">
+        <span class="tag">ChatGPT</span><span class="tag">Claude</span><span class="tag">Gemini</span>
+        <span class="tag">Perplexity</span><span class="tag">Google AI Overviews</span><span class="tag">Copilot</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.4"/><circle cx="5" cy="17" r="2.4"/><circle cx="19" cy="17" r="2.4"/><path d="M12 7.4v4.3M10.3 13.2 6.6 15.6M13.7 13.2l3.7 2.4"/><circle cx="12" cy="12.4" r="1.3"/></svg></div>
+      <h3>Entity &amp; Authority Building</h3>
+      <p>AI will not name a business it cannot identify. We build one consistent identity across every source it checks, so the models know exactly who you are and trust it.</p>
+      <div class="lbl">Where we build it</div>
+      <div class="tags">
+        <span class="tag">LinkedIn</span><span class="tag">Reddit</span><span class="tag">Quora</span>
+        <span class="tag">Wikidata</span><span class="tag">Crunchbase</span><span class="tag">YouTube</span><span class="tag">G2</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0v-5a3 3 0 0 1 3-3Z"/><path d="M6 11.2a6 6 0 0 0 12 0M12 17.2v3.3M9.4 20.5h5.2"/></svg></div>
+      <h3>Earned Media &amp; PR</h3>
+      <p>We get you quoted in real publications and on podcasts, by real journalists. Those independent mentions are the proof AI looks for before it puts your name in an answer.</p>
+      <div class="lbl">Where we place you</div>
+      <div class="tags">
+        <span class="tag">Qwoted</span><span class="tag">Connectively</span><span class="tag">Featured</span>
+        <span class="tag">Podcasts</span><span class="tag">Trade press</span><span class="tag">Best-of roundups</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

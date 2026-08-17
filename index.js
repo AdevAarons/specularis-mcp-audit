@@ -36,6 +36,8 @@ let STATS_BAR_HTML = "";
 try { STATS_BAR_HTML = readFileSync(join(__dirname, "public", "stats-bar.html"), "utf8"); } catch (e) {}
 let DASHBOARD_HTML = "";
 try { DASHBOARD_HTML = readFileSync(join(__dirname, "public", "dashboard.html"), "utf8"); } catch (e) {}
+let WHAT_WE_DO_HTML = "";
+try { WHAT_WE_DO_HTML = readFileSync(join(__dirname, "public", "what-we-do.html"), "utf8"); } catch (e) {}
 let PROOF_CARD_HTML = "";
 try { PROOF_CARD_HTML = readFileSync(join(__dirname, "public", "proof-card.html"), "utf8"); } catch (e) {}
 let PRICING_SWITCHER_HTML = "";
@@ -553,6 +555,12 @@ app.get("/dashboard", (req, res) => {
   if (key && req.query.k !== key) return res.status(401).send("Unauthorized");
   if (!DASHBOARD_HTML) return res.status(404).send("Not found");
   res.type("html").send(DASHBOARD_HTML);
+});
+
+// "What we do" service cards with platform badges
+app.get("/what-we-do", (_req, res) => {
+  if (!WHAT_WE_DO_HTML) return res.status(404).send("Not found");
+  res.type("html").send(WHAT_WE_DO_HTML);
 });
 
 // Social-proof result card (screenshot for LinkedIn)
