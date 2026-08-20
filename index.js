@@ -38,6 +38,8 @@ let DASHBOARD_HTML = "";
 try { DASHBOARD_HTML = readFileSync(join(__dirname, "public", "dashboard.html"), "utf8"); } catch (e) {}
 let WHAT_WE_DO_HTML = "";
 try { WHAT_WE_DO_HTML = readFileSync(join(__dirname, "public", "what-we-do.html"), "utf8"); } catch (e) {}
+let SCHEMA_V3_TXT = "";
+try { SCHEMA_V3_TXT = readFileSync(join(__dirname, "public", "schema-v3.txt"), "utf8"); } catch (e) {}
 let PROOF_CARD_HTML = "";
 try { PROOF_CARD_HTML = readFileSync(join(__dirname, "public", "proof-card.html"), "utf8"); } catch (e) {}
 let PRICING_SWITCHER_HTML = "";
@@ -561,6 +563,12 @@ app.get("/dashboard", (req, res) => {
 app.get("/what-we-do", (_req, res) => {
   if (!WHAT_WE_DO_HTML) return res.status(404).send("Not found");
   res.type("html").send(WHAT_WE_DO_HTML);
+});
+
+// Schema v3 served as PLAIN TEXT so it can be selected and copied verbatim
+app.get("/schema-v3.txt", (_req, res) => {
+  if (!SCHEMA_V3_TXT) return res.status(404).send("Not found");
+  res.type("text/plain; charset=utf-8").send(SCHEMA_V3_TXT);
 });
 
 // Social-proof result card (screenshot for LinkedIn)

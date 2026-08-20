@@ -1,0 +1,85 @@
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://www.specularisinc.com/#organization",
+      "name": "Specularis",
+      "legalName": "Specularis Inc.",
+      "url": "https://www.specularisinc.com",
+      "foundingDate": "2019",
+      "description": "Specularis is an AI visibility (GEO/AEO) agency that helps businesses get found, trusted, and cited by AI engines like ChatGPT, Claude, and Perplexity.",
+      "disambiguatingDescription": "Specularis is a modern AI search visibility (GEO/AEO) company that helps brands get found, trusted, and cited by AI engines like ChatGPT, Claude, and Perplexity. It is a marketing technology firm founded by Adev Aarons in 2019, based in Miami, Florida.",
+      "slogan": "Become the business AI recommends.",
+      "email": "adev@specularisinc.com",
+      "areaServed": "Worldwide",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Miami",
+        "addressRegion": "FL",
+        "addressCountry": "US"
+      },
+      "knowsAbout": [
+        "Generative Engine Optimization (GEO)",
+        "Answer Engine Optimization (AEO)",
+        "AI search visibility",
+        "getting cited by ChatGPT, Claude, and Perplexity",
+        "structured data and entity optimization",
+        "AI crawler accessibility"
+      ],
+      "sameAs": [
+        "https://www.linkedin.com/company/specularis",
+        "https://www.crunchbase.com/organization/specularis",
+        "https://x.com/AdevAarons",
+        "https://github.com/AdevAarons"
+      ],
+      "founder": {
+        "@id": "https://www.specularisinc.com/#adev-aarons"
+      },
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://specularis-mcp-audit-production.up.railway.app/assets/specularis-logo.png",
+        "contentUrl": "https://specularis-mcp-audit-production.up.railway.app/assets/specularis-logo.png",
+        "caption": "Specularis logo"
+      },
+      "image": "https://specularis-mcp-audit-production.up.railway.app/assets/specularis-logo.png"
+    },
+    {
+      "@type": "Person",
+      "@id": "https://www.specularisinc.com/#adev-aarons",
+      "name": "Adev Aarons",
+      "jobTitle": "Founder",
+      "description": "Founder of Specularis. Helps businesses get found, trusted, and cited by AI engines through GEO and AEO.",
+      "url": "https://www.specularisinc.com/founder",
+      "worksFor": {
+        "@id": "https://www.specularisinc.com/#organization"
+      },
+      "knowsAbout": [
+        "Generative Engine Optimization (GEO)",
+        "Answer Engine Optimization (AEO)",
+        "AI search visibility",
+        "getting cited by ChatGPT, Claude, and Perplexity"
+      ],
+      "sameAs": [
+        "https://x.com/AdevAarons",
+        "https://www.linkedin.com/in/adev-aarons/"
+      ],
+      "image": {
+        "@type": "ImageObject",
+        "url": "https://specularis-mcp-audit-production.up.railway.app/assets/adev-headshot.png",
+        "contentUrl": "https://specularis-mcp-audit-production.up.railway.app/assets/adev-headshot.png",
+        "caption": "Adev Aarons, Founder of Specularis"
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.specularisinc.com/#website",
+      "url": "https://www.specularisinc.com",
+      "name": "Specularis",
+      "publisher": {
+        "@id": "https://www.specularisinc.com/#organization"
+      }
+    }
+  ]
+}</script>
