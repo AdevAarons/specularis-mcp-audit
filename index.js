@@ -2,7 +2,7 @@
 // Exposes the free GEO/AEO audit as a tool inside Claude / ChatGPT / any MCP client.
 // Reuses the existing n8n audit webhook as the backend engine.
 
-import { webcrypto } from "node:crypto";
+import { webcrypto, createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -70,6 +70,7 @@ const NOTION_LEADS_DB = process.env.NOTION_LEADS_DB || ""; // Notion database id
 const FINDER_IP_MAX = Number(process.env.FINDER_IP_MAX || 6);                    // requests per IP per window
 const FINDER_IP_WINDOW_MS = Number(process.env.FINDER_IP_WINDOW_MS || 15 * 60 * 1000); // 15 min
 const FINDER_DAY_MAX = Number(process.env.FINDER_DAY_MAX || 250);                // global runs per day
+const BADGE_SECRET = process.env.BADGE_SECRET || "specularis-badge-dev-secret";
 const PORT = process.env.PORT || 3000;
 
 // ---- helpers ----
@@ -127,56 +128,124 @@ const quickSnapshot = async (site) => {
 
 
 // ---- Instant scan: score a site from cheap signals only (no LLM calls) ----
+const BOT_UAS = {
+  GPTBot: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot",
+  ClaudeBot: "Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)",
+  PerplexityBot: "Mozilla/5.0 (compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)",
+};
+const CHALLENGE_RX = /just a moment|checking your browser|cf-browser-verification|enable javascript and cookies|attention required|captcha|are you a robot|access denied|request blocked/i;
+
+const visibleWords = (html) => {
+  const t = String(html || "")
+    .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<[^>]+>/g, " ").replace(/&[a-z#0-9]+;/gi, " ");
+  return t.split(/\s+/).filter(w => w.length > 1).length;
+};
+
+// robots.txt: honour Allow, wildcards, and the * group properly
+const robotsBlocks = (robotsText, ua) => {
+  const lines = String(robotsText || "").split(/\r?\n/).map(l => l.replace(/#.*$/, "").trim()).filter(Boolean);
+  let groups = [], cur = null;
+  for (const l of lines) {
+    const m = l.match(/^([a-z-]+)\s*:\s*(.*)$/i); if (!m) continue;
+    const k = m[1].toLowerCase(), v = m[2].trim();
+    if (k === "user-agent") {
+      if (!cur || cur.rules.length) { cur = { agents: [], rules: [] }; groups.push(cur); }
+      cur.agents.push(v.toLowerCase());
+    } else if (cur && (k === "disallow" || k === "allow")) cur.rules.push({ allow: k === "allow", path: v });
+  }
+  const pick = groups.find(g => g.agents.includes(ua.toLowerCase())) || groups.find(g => g.agents.includes("*"));
+  if (!pick) return false;
+  const root = pick.rules.filter(r => r.path === "/" || r.path === "");
+  const disallowRoot = root.some(r => !r.allow && r.path === "/");
+  const allowRoot = pick.rules.some(r => r.allow && (r.path === "/" || r.path === ""));
+  return disallowRoot && !allowRoot;
+};
+
 const scoreSnapshot = async (site) => {
-  const [robots, home, llms] = await Promise.all([
+  const [robots, browser, llms, sitemap] = await Promise.all([
     fetchWithTimeout(site.origin + "/robots.txt"),
     fetchWithTimeout(site.url),
     fetchWithTimeout(site.origin + "/llms.txt"),
+    fetchWithTimeout(site.origin + "/sitemap.xml", {}, 5000),
   ]);
-  // browser control: what a normal browser gets vs what GPTBot gets
-  const asBot = await fetchWithTimeout(site.url, { headers: { "User-Agent":
-    "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot" } });
+  // every major bot, not just GPTBot
+  const botNames = Object.keys(BOT_UAS);
+  const botRes = await Promise.all(botNames.map(n =>
+    fetchWithTimeout(site.url, { headers: { "User-Agent": BOT_UAS[n] } }, 9000)));
 
   const robotsText = robots.text || "";
-  const starBlocked = /user-agent:\s*\*[\s\S]*?disallow:\s*\/\s*(\n|$)/i.test(robotsText);
-  const named = ["GPTBot","ClaudeBot","PerplexityBot"].filter((b) => {
-    const blk = robotsText.match(new RegExp("user-agent:\\s*" + b + "[\\s\\S]*?(?=user-agent:|$)", "i"));
-    return blk && /disallow:\s*\/\s*(\n|$)/i.test(blk[0]);
-  });
-  const botBlocked = !asBot.ok && home.ok;           // serves a browser, refuses the bot
-  const text = (asBot.text || home.text || "").replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ");
-  const words = text.split(/\s+/).filter(Boolean).length;
+  const browserOk = browser.ok && !CHALLENGE_RX.test((browser.text || "").slice(0, 4000));
+  const browserWords = visibleWords(browser.text);
 
-  const types = [];
+  const bots = {};
+  botNames.forEach((n, i) => {
+    const r = botRes[i];
+    const challenged = CHALLENGE_RX.test((r.text || "").slice(0, 4000));
+    const words = visibleWords(r.text);
+    const robotsBlocked = robotsBlocks(robotsText, n);
+    // "served" means: 200, not a challenge page, and got a real amount of text
+    const served = r.ok && !challenged && words >= Math.max(40, browserWords * 0.25);
+    bots[n] = { status: r.status, words, challenged, robotsBlocked, served };
+  });
+  const blockedBots = botNames.filter(n => !bots[n].served || bots[n].robotsBlocked);
+  const starBlocked = robotsBlocks(robotsText, "*");
+
+  // JS-rendering gap: browser sees far more than the bot does
+  const botBest = Math.max(...botNames.map(n => bots[n].words));
+  const renderGap = browserOk && browserWords > 300 && botBest < browserWords * 0.4;
+
+  // schema: must actually parse and carry a name
+  let valid = 0; const types = [];
   const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  let mm; const src = home.text || "";
-  while ((mm = re.exec(src)) !== null) {
-    try { const j = JSON.parse(mm[1]); const arr = Array.isArray(j) ? j : (j["@graph"] || [j]);
-      for (const n of arr) if (n && n["@type"]) types.push([].concat(n["@type"]).join("/")); } catch (e) {}
+  let m; const src = browser.text || "";
+  while ((m = re.exec(src)) !== null) {
+    try {
+      const j = JSON.parse(m[1].trim()); const arr = Array.isArray(j) ? j : (j["@graph"] || [j]);
+      for (const n of arr) {
+        if (!n || !n["@type"]) continue;
+        types.push([].concat(n["@type"]).join("/"));
+        if (n.name || n.headline) valid++;
+      }
+    } catch (e) {}
   }
   const uniq = [...new Set(types)];
-  const hasOrg = uniq.some(t => /Organization|LocalBusiness/i.test(t));
+  const hasOrg = uniq.some(t => /Organization|LocalBusiness|ProfessionalService/i.test(t));
   const hasPerson = uniq.some(t => /Person/i.test(t));
-  const llmsPresent = llms.ok && (llms.text || "").length > 20;
+  const hasAddress = /"addressLocality"|"streetAddress"/i.test(src);
+  const llmsText = llms.ok ? (llms.text || "") : "";
+  const llmsPresent = llmsText.length > 40;
+  const llmsUseful = llmsPresent && /##|when to|use this|about/i.test(llmsText);
+  const hasSitemap = sitemap.ok && /<urlset|<sitemapindex/i.test(sitemap.text || "");
 
-  // ---- scoring (0-100), transparent and cheap ----
+  // ---- scoring: 40 access / 30 identity / 30 content ----
   let access = 40;
-  if (starBlocked) access = 0; else if (named.length) access = 12; else if (botBlocked) access = 8;
+  if (starBlocked) access = 0;
+  else if (blockedBots.length === botNames.length) access = 4;
+  else if (blockedBots.length) access = Math.max(10, 40 - blockedBots.length * 12);
+  if (access > 0 && !hasSitemap) access -= 4;
+
   let identity = 0;
-  if (uniq.length) identity += 12;
-  if (hasOrg) identity += 10;
-  if (hasPerson) identity += 5;
-  if (llmsPresent) identity += 3;
+  if (valid > 0) identity += 10;
+  if (hasOrg) identity += 9;
+  if (hasPerson) identity += 4;
+  if (hasAddress) identity += 3;
+  if (llmsPresent) identity += 2;
+  if (llmsUseful) identity += 2;
+
   let content = 0;
-  if (words >= 1200) content = 30; else if (words >= 600) content = 22;
-  else if (words >= 250) content = 14; else if (words >= 60) content = 7;
-  const total = Math.max(0, Math.min(100, access + identity + content));
+  if (botBest >= 1200) content = 30; else if (botBest >= 600) content = 23;
+  else if (botBest >= 250) content = 15; else if (botBest >= 60) content = 7;
+  if (renderGap) content = Math.min(content, 10);
+
+  const total = Math.max(0, Math.min(100, Math.round(access + identity + content)));
   const grade = total >= 85 ? "A" : total >= 70 ? "B" : total >= 55 ? "C" : total >= 40 ? "D" : "F";
 
-  return { host: site.host, total, grade,
-    access, identity, content,
-    starBlocked, named, botBlocked, words, uniq, hasOrg, hasPerson, llmsPresent,
-    reachable: home.ok };
+  return { host: site.host, total, grade, access, identity, content,
+    starBlocked, named: blockedBots, botBlocked: blockedBots.length > 0 && browserOk,
+    bots, browserWords, words: botBest, renderGap,
+    uniq, validSchema: valid, hasOrg, hasPerson, hasAddress,
+    llmsPresent, llmsUseful, hasSitemap, reachable: browserOk || botBest > 0 };
 };
 
 const esc = (v) => String(v == null ? "" : v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -659,6 +728,7 @@ app.get("/api/scan", async (req, res) => {
       ? "This free tool has hit today's limit. Try again tomorrow, or run the full audit."
       : "That's a few checks in a short window. Give it a minute." });
     const r = await scoreSnapshot(site);
+    r.badge = badgeUrl(site.host.replace(/^www\./, ""), r.total, r.grade);
     if (!r.reachable && !r.botBlocked) return res.status(502).json({ error: "Could not reach that site. Check the domain and try again." });
     res.json(r);
   } catch (e) { res.status(500).json({ error: "Something went wrong on our side." }); }
@@ -716,38 +786,48 @@ app.post("/api/full-report", async (req, res) => {
 });
 
 
-// ---- Badge: renders the site-readiness score as an SVG, cached 1h ----
-const BADGE_CACHE = new Map();
-const badgeSvg = (host, score, grade) => {
+// ---- Badge: a frozen, signed snapshot. Score is in the URL and cannot be forged. ----
+const badgeSign = (host, score, grade, dt) =>
+  createHmac("sha256", BADGE_SECRET).update([host, score, grade, dt].join("|")).digest("base64url").slice(0, 16);
+
+const badgeUrl = (host, score, grade) => {
+  const dt = new Date().toISOString().slice(0, 7); // YYYY-MM, the "as of" stamp
+  const sig = badgeSign(host, score, grade, dt);
+  return `/badge.svg?d=${encodeURIComponent(host)}&s=${score}&g=${grade}&t=${dt}&k=${sig}`;
+};
+
+const badgeSvg = (host, score, grade, dt) => {
   const col = score >= 85 ? "#2f9e5e" : score >= 60 ? "#e0952f" : "#b3402c";
-  const label = "SITE READINESS";
-  const w = 260, h = 64;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${label} ${score} of 100">
+  const w = 268, h = 66;
+  const when = dt ? String(dt) : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Site readiness ${score} of 100 for ${host}">
   <rect width="${w}" height="${h}" rx="6" fill="#111214"/>
   <rect x="0" y="0" width="4" height="${h}" rx="2" fill="${col}"/>
-  <text x="20" y="24" fill="#8c9298" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" letter-spacing="2.2">${label}</text>
-  <text x="20" y="49" fill="#ffffff" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" font-weight="700" letter-spacing="-0.8">${score}<tspan fill="#5b6167" font-size="14"> / 100</tspan> <tspan fill="${col}" font-size="20">${grade}</tspan></text>
+  <text x="20" y="24" fill="#8c9298" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" letter-spacing="2.2">SITE READINESS</text>
+  <text x="20" y="50" fill="#ffffff" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" font-weight="700" letter-spacing="-0.8">${score}<tspan fill="#5b6167" font-size="14"> / 100</tspan> <tspan fill="${col}" font-size="20">${grade}</tspan></text>
   <text x="${w - 20}" y="24" text-anchor="end" fill="#5b6167" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" letter-spacing="1.6">SPECULARIS</text>
-  <text x="${w - 20}" y="49" text-anchor="end" fill="#8c9298" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10">${String(host).slice(0, 26)}</text>
+  <text x="${w - 20}" y="43" text-anchor="end" fill="#8c9298" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5">${String(host).slice(0, 28)}</text>
+  <text x="${w - 20}" y="56" text-anchor="end" fill="#5b6167" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="8.5">as of ${when}</text>
 </svg>`;
 };
 
 app.get("/badge.svg", async (req, res) => {
+  res.set("Content-Type", "image/svg+xml").set("Cache-Control", "public, max-age=86400, immutable");
   try {
-    const site = normalizeUrl(String(req.query.d || ""));
-    res.set("Content-Type", "image/svg+xml").set("Cache-Control", "public, max-age=3600");
-    if (!site) return res.send(badgeSvg("specularisinc.com", 0, "?"));
-    const key = site.host, now = Date.now();
-    let hit = BADGE_CACHE.get(key);
-    if (!hit || now - hit.at > 3600000) {
-      const r = await scoreSnapshot(site);
-      hit = { at: now, score: r.total, grade: r.grade };
-      BADGE_CACHE.set(key, hit);
-      if (BADGE_CACHE.size > 500) BADGE_CACHE.delete(BADGE_CACHE.keys().next().value);
+    const host = String(req.query.d || "").toLowerCase().replace(/^www\./, "");
+    const score = parseInt(req.query.s, 10), grade = String(req.query.g || ""), dt = String(req.query.t || ""), k = String(req.query.k || "");
+    // signed snapshot: frozen forever, verifiable, not re-scanned
+    if (host && Number.isFinite(score) && grade && dt && k && k === badgeSign(host, score, grade, dt)) {
+      return res.send(badgeSvg(host, score, grade, dt));
     }
-    res.send(badgeSvg(site.host, hit.score, hit.grade));
+    // unsigned request: scan live so the badge is never a lie, but do not pretend it is a snapshot
+    const site = normalizeUrl(host || String(req.query.d || ""));
+    if (!site) return res.send(badgeSvg("specularis", 0, "?", ""));
+    const r = await scoreSnapshot(site);
+    res.set("Cache-Control", "public, max-age=3600");
+    return res.send(badgeSvg(site.host, r.total, r.grade, new Date().toISOString().slice(0, 7)));
   } catch (e) {
-    res.set("Content-Type", "image/svg+xml").send(badgeSvg("error", 0, "?"));
+    return res.send(badgeSvg("unavailable", 0, "?", ""));
   }
 });
 

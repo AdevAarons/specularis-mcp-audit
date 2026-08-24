@@ -205,7 +205,7 @@ function cp(btn, kind){
   if(!LAST) return;
   const url='https://www.specularisinc.com/free-audit';
   const alt='Site readiness '+LAST.total+'/100, checked by Specularis';
-  const img='https://specularis-mcp-audit-production.up.railway.app/badge.svg?d='+encodeURIComponent(LAST.host);
+  const img='https://specularis-mcp-audit-production.up.railway.app'+(LAST.badge||'/badge.svg?d='+encodeURIComponent(LAST.host));
   const v = kind==='md' ? '[!['+alt+']('+img+')]('+url+')'
           : kind==='html' ? '<a href="'+url+'"><img src="'+img+'" alt="'+alt+'"></a>' : img;
   navigator.clipboard.writeText(v).then(()=>{
