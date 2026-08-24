@@ -715,6 +715,42 @@ app.post("/api/full-report", async (req, res) => {
   } catch (e) { res.status(500).json({ error: "internal error" }); }
 });
 
+
+// ---- Badge: renders the site-readiness score as an SVG, cached 1h ----
+const BADGE_CACHE = new Map();
+const badgeSvg = (host, score, grade) => {
+  const col = score >= 85 ? "#2f9e5e" : score >= 60 ? "#e0952f" : "#b3402c";
+  const label = "SITE READINESS";
+  const w = 260, h = 64;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${label} ${score} of 100">
+  <rect width="${w}" height="${h}" rx="6" fill="#111214"/>
+  <rect x="0" y="0" width="4" height="${h}" rx="2" fill="${col}"/>
+  <text x="20" y="24" fill="#8c9298" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" letter-spacing="2.2">${label}</text>
+  <text x="20" y="49" fill="#ffffff" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" font-weight="700" letter-spacing="-0.8">${score}<tspan fill="#5b6167" font-size="14"> / 100</tspan> <tspan fill="${col}" font-size="20">${grade}</tspan></text>
+  <text x="${w - 20}" y="24" text-anchor="end" fill="#5b6167" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" letter-spacing="1.6">SPECULARIS</text>
+  <text x="${w - 20}" y="49" text-anchor="end" fill="#8c9298" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10">${String(host).slice(0, 26)}</text>
+</svg>`;
+};
+
+app.get("/badge.svg", async (req, res) => {
+  try {
+    const site = normalizeUrl(String(req.query.d || ""));
+    res.set("Content-Type", "image/svg+xml").set("Cache-Control", "public, max-age=3600");
+    if (!site) return res.send(badgeSvg("specularisinc.com", 0, "?"));
+    const key = site.host, now = Date.now();
+    let hit = BADGE_CACHE.get(key);
+    if (!hit || now - hit.at > 3600000) {
+      const r = await scoreSnapshot(site);
+      hit = { at: now, score: r.total, grade: r.grade };
+      BADGE_CACHE.set(key, hit);
+      if (BADGE_CACHE.size > 500) BADGE_CACHE.delete(BADGE_CACHE.keys().next().value);
+    }
+    res.send(badgeSvg(site.host, hit.score, hit.grade));
+  } catch (e) {
+    res.set("Content-Type", "image/svg+xml").send(badgeSvg("error", 0, "?"));
+  }
+});
+
 // Add-ons tab switcher — embedded by URL on the pricing section (interactive)
 app.get("/addons-switcher", (_req, res) => {
   if (!ADDONS_SWITCHER_HTML) return res.status(404).send("Not found");

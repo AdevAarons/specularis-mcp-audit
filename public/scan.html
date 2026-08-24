@@ -104,7 +104,7 @@
 
     <div class="mark">
       <div class="markbox">
-        <div class="t">AI Visibility</div>
+        <div class="t">Site Readiness</div>
         <div class="v"><span id="bsc"></span> <span id="bgr"></span></div>
       </div>
       <div class="grab">
@@ -115,8 +115,8 @@
     </div>
 
     <div class="rest">
-      <h3>Two things we can't see from out here</h3>
-      <p>Everything above lives on your website. The rest is off it: whether other sources back you up, and what the AI engines say when someone actually asks about your business. That's the part worth reading.</p>
+      <h3>This is only half the picture</h3>
+      <p>Site readiness is what AI can see when it visits you. It says nothing about whether AI actually recommends you, because that depends on things off your site. Give us an email and we'll run those two checks live, right here, and send the written report.</p>
       <form class="mail" onsubmit="return sendFull(event)">
         <input id="em" type="email" placeholder="you@yourbusiness.com" required>
         <button type="submit">Send it →</button>
@@ -153,7 +153,7 @@ function render(j){
     : (j.uniq.length ? 'AI can read you. It still might not name you.'
                      : 'AI can read you, but has to guess who you are.');
   document.getElementById('big').textContent = j.total;
-  document.getElementById('grade').textContent = 'out of 100 on what we can see from your site';
+  document.getElementById('grade').textContent = 'site readiness · what AI can see when it visits';
   document.getElementById('bsc').textContent = j.total;
   document.getElementById('bgr').textContent = j.grade;
 
@@ -204,8 +204,8 @@ function render(j){
 function cp(btn, kind){
   if(!LAST) return;
   const url='https://www.specularisinc.com/free-audit';
-  const alt='AI Visibility '+LAST.total+'/100 — checked by Specularis';
-  const img='https://specularis-mcp-audit-production.up.railway.app/assets/specularis-logo.png';
+  const alt='Site readiness '+LAST.total+'/100, checked by Specularis';
+  const img='https://specularis-mcp-audit-production.up.railway.app/badge.svg?d='+encodeURIComponent(LAST.host);
   const v = kind==='md' ? '[!['+alt+']('+img+')]('+url+')'
           : kind==='html' ? '<a href="'+url+'"><img src="'+img+'" alt="'+alt+'"></a>' : img;
   navigator.clipboard.writeText(v).then(()=>{
