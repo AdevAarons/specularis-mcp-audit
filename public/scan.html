@@ -8,124 +8,120 @@
 <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
 <style>
-  :root{ --blue:#2467E3; --blue-lt:#4d86ff; --ink:#141414; --muted:#6b7280; --line:#e7e9ee;
-         --bg:#ffffff; --wash:#f6f8fc; --red:#e0533d; --amber:#e0952f; --green:#2f9e5e; }
+  :root{ --blue:#2467E3; --ink:#111214; --mid:#5b6167; --soft:#8c9298; --rule:#dfe1e5;
+         --bg:#fdfdfc; --fail:#b3402c; }
   *{ box-sizing:border-box; margin:0; padding:0; }
-  body{ background:var(--bg); color:var(--ink); line-height:1.55;
-    font-family:Satoshi,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
-  .wrap{ max-width:820px; margin:0 auto; padding:40px 22px 70px; }
-  .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  body{ background:var(--bg); color:var(--ink); line-height:1.5;
+    font-family:Satoshi,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:700px; margin:0 auto; padding:72px 24px 90px; }
+  .m{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; letter-spacing:.02em; }
 
-  /* input */
-  .lede{ text-align:center; margin-bottom:30px; }
-  h1{ font-size:clamp(30px,5vw,44px); font-weight:900; letter-spacing:-.03em; line-height:1.08; }
-  .sub{ color:var(--muted); font-size:16.5px; margin-top:12px; }
-  form{ display:flex; gap:8px; max-width:520px; margin:26px auto 0; }
-  input{ flex:1; font:inherit; font-size:16px; padding:14px 16px; border:1.5px solid var(--line);
-    border-radius:11px; outline:none; }
-  input:focus{ border-color:var(--blue); }
-  button.go{ font:inherit; font-size:15px; font-weight:700; padding:14px 24px; border:0; border-radius:11px;
-    background:var(--blue); color:#fff; cursor:pointer; white-space:nowrap; }
-  button.go:disabled{ opacity:.55; cursor:default; }
-  .hint{ font-size:13px; color:#9aa1ad; margin-top:11px; }
+  /* ask */
+  h1{ font-size:clamp(28px,4.6vw,40px); font-weight:700; letter-spacing:-.035em; line-height:1.1; max-width:15ch; }
+  .sub{ color:var(--mid); font-size:16px; margin-top:14px; max-width:46ch; }
+  form.ask{ display:flex; gap:0; margin:32px 0 0; border-bottom:1.5px solid var(--ink); max-width:460px; }
+  form.ask input{ flex:1; font:inherit; font-size:17px; padding:10px 2px; border:0; background:none; outline:none; }
+  form.ask input::placeholder{ color:#b6bbc0; }
+  form.ask button{ font:inherit; font-size:14px; font-weight:700; padding:10px 0 10px 18px; border:0;
+    background:none; color:var(--blue); cursor:pointer; letter-spacing:-.01em; }
+  form.ask button:disabled{ color:var(--soft); cursor:default; }
+  .hint{ font-size:13px; color:var(--soft); margin-top:12px; }
 
-  #out{ display:none; margin-top:38px; }
-  .err{ display:none; margin-top:22px; text-align:center; color:var(--red); font-size:15px; }
+  #out{ display:none; margin-top:64px; }
+  .err{ display:none; margin-top:24px; color:var(--fail); font-size:15px; }
 
-  /* result head */
-  .rhead{ display:flex; align-items:flex-start; justify-content:space-between; gap:18px; flex-wrap:wrap; }
-  .dom{ font-size:24px; font-weight:800; letter-spacing:-.02em; }
-  .stamp{ font-size:12px; color:var(--muted); margin-top:3px; }
-  .badge{ background:#141414; color:#fff; border-radius:11px; padding:13px 16px; min-width:196px; }
-  .badge .r1{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
-  .badge .lbl{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:#c9cdd4; }
-  .badge .sc{ font-size:19px; font-weight:900; }
-  .badge .r2{ display:flex; justify-content:space-between; font-size:10px; color:#7b8290; margin-top:8px; letter-spacing:.1em; }
-  .cprow{ display:flex; gap:6px; margin-top:9px; }
-  .cprow button{ flex:1; font:inherit; font-size:11px; font-weight:700; padding:6px 4px; border-radius:7px;
-    border:1px solid var(--line); background:#fff; color:#4b5563; cursor:pointer; }
-  .cprow button:hover{ border-color:var(--blue); color:var(--blue); }
-  .cprow button.done{ background:var(--blue); color:#fff; border-color:var(--blue); }
+  /* verdict */
+  .dom{ font-size:14px; font-weight:600; color:var(--mid); letter-spacing:-.01em; }
+  .verdict{ font-size:clamp(24px,3.6vw,32px); font-weight:700; letter-spacing:-.03em; line-height:1.2;
+    margin:10px 0 0; max-width:22ch; }
+  .num{ display:flex; align-items:baseline; gap:10px; margin:26px 0 4px; }
+  .num b{ font-size:56px; font-weight:700; letter-spacing:-.05em; line-height:1; }
+  .num span{ font-size:15px; color:var(--soft); }
+  .diag{ color:var(--mid); font-size:16px; margin-top:16px; max-width:56ch; }
 
-  .scorewrap{ display:flex; align-items:flex-start; gap:26px; margin:26px 0 6px; flex-wrap:wrap; }
-  .big{ font-size:84px; font-weight:900; line-height:.9; letter-spacing:-.045em; }
-  .big .of{ font-size:30px; color:#c3c7cf; }
-  .vsub{ padding-top:10px; font-size:15px; font-weight:700; }
-  .diag{ font-size:16.5px; margin:14px 0 26px; max-width:62ch; color:#33383f; }
+  /* checks */
+  .checks{ margin-top:46px; }
+  .ck{ padding:22px 0; border-top:1px solid var(--rule); }
+  .ck:last-child{ border-bottom:1px solid var(--rule); }
+  .ckhead{ display:flex; align-items:baseline; gap:16px; }
+  .ckq{ font-size:16.5px; font-weight:600; flex:1; letter-spacing:-.01em; }
+  .ckv{ font-size:13px; font-weight:700; color:var(--mid); white-space:nowrap; }
+  .ckv.bad{ color:var(--fail); }
+  .facts{ margin-top:10px; font-size:14px; color:var(--mid); }
+  .facts i{ font-style:normal; }
+  .facts i::before{ content:"·"; margin:0 7px; color:var(--rule); }
+  .facts i:first-child::before{ content:""; margin:0; }
+  .facts i.no{ color:var(--fail); }
+  .why{ font-size:14.5px; color:var(--mid); margin-top:10px; max-width:60ch; }
 
-  .rows{ border-top:1px solid var(--line); }
-  .row{ border-bottom:1px solid var(--line); padding:17px 2px; }
-  .rtop{ display:flex; align-items:center; gap:13px; }
-  .q{ font-size:16px; font-weight:600; flex:1; }
-  .pct{ font-size:13.5px; font-weight:800; }
-  .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
-  .chip{ font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; font-weight:700;
-    padding:3px 8px; border-radius:5px; background:#f1f3f7; color:#77808f; }
-  .chip.ok{ background:#e8f6ee; color:var(--green); } .chip.no{ background:#fdeceb; color:var(--red); }
-  .note{ font-size:14px; color:#4b525c; margin-top:9px; max-width:64ch; }
+  .ck.off .ckq{ color:var(--soft); }
+  .ck.off .ckv{ color:var(--soft); font-weight:600; }
 
-  /* locked rows */
-  .row.locked{ opacity:.72; }
-  .row.locked .q::after{ content:" 🔒"; font-size:12px; }
-  .row.locked .pct{ color:var(--muted); }
+  /* mark */
+  .mark{ margin-top:44px; padding-top:26px; border-top:1px solid var(--rule);
+    display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .markbox{ border:1px solid var(--ink); padding:11px 15px; }
+  .markbox .t{ font-size:9.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--mid); }
+  .markbox .v{ font-size:18px; font-weight:700; letter-spacing:-.02em; margin-top:2px; }
+  .grab{ display:flex; gap:16px; padding-bottom:4px; }
+  .grab button{ font:inherit; font-size:13px; font-weight:600; border:0; background:none;
+    color:var(--mid); cursor:pointer; padding:0; border-bottom:1px solid var(--rule); }
+  .grab button:hover{ color:var(--blue); border-color:var(--blue); }
+  .grab button.done{ color:var(--blue); border-color:var(--blue); }
 
-  .gate{ margin-top:30px; background:var(--wash); border:1px solid var(--line); border-radius:16px; padding:26px 28px; }
-  .gate h3{ font-size:19px; letter-spacing:-.01em; }
-  .gate p{ color:var(--muted); font-size:14.5px; margin:7px 0 17px; max-width:58ch; }
-  .gate form{ margin:0; max-width:100%; }
-  .ok{ display:none; margin-top:14px; color:var(--green); font-weight:700; font-size:15px; }
+  /* rest */
+  .rest{ margin-top:52px; }
+  .rest h3{ font-size:18px; font-weight:700; letter-spacing:-.02em; }
+  .rest p{ color:var(--mid); font-size:15px; margin:10px 0 22px; max-width:56ch; }
+  form.mail{ display:flex; gap:0; border-bottom:1.5px solid var(--ink); max-width:440px; }
+  form.mail input{ flex:1; font:inherit; font-size:16px; padding:10px 2px; border:0; background:none; outline:none; }
+  form.mail button{ font:inherit; font-size:14px; font-weight:700; padding:10px 0 10px 18px; border:0;
+    background:none; color:var(--blue); cursor:pointer; }
+  .sent{ display:none; margin-top:14px; font-size:15px; color:var(--mid); }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <div class="lede">
-    <h1>Can AI actually find you?</h1>
-    <p class="sub">Ten seconds. No signup. We check what ChatGPT, Claude and Perplexity see when they visit your site.</p>
-    <form id="f" onsubmit="return run(event)">
-      <input id="d" placeholder="yourbusiness.com" autocomplete="off" spellcheck="false" required>
-      <button class="go" id="btn" type="submit">Check my site</button>
-    </form>
-    <p class="hint">Free, and we do not need your email for this part.</p>
-  </div>
+  <h1>Can AI actually find you?</h1>
+  <p class="sub">Ten seconds, no signup. We look at your site the way ChatGPT, Claude and Perplexity do.</p>
+  <form class="ask" onsubmit="return run(event)">
+    <input id="d" placeholder="yourbusiness.com" autocomplete="off" spellcheck="false" required>
+    <button id="btn" type="submit">Check →</button>
+  </form>
+  <p class="hint">We don't need your email for this part.</p>
 
   <p class="err" id="err"></p>
 
   <div id="out">
-    <div class="rhead">
-      <div>
-        <div class="dom" id="dom"></div>
-        <div class="stamp mono" id="stamp"></div>
-      </div>
-      <div>
-        <div class="badge">
-          <div class="r1"><span class="lbl">AI Visibility</span><span class="sc"><span id="bsc"></span> <span id="bgr"></span></span></div>
-          <div class="r2 mono"><span>SPECULARIS</span><span>2026</span></div>
-        </div>
-        <div class="cprow">
-          <button onclick="cp(this,'md')">Markdown</button>
-          <button onclick="cp(this,'html')">Embed</button>
-          <button onclick="cp(this,'img')">Image</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="scorewrap">
-      <div class="big" id="big"></div>
-      <div class="vsub" id="vsub"></div>
-    </div>
+    <div class="dom m" id="dom"></div>
+    <div class="verdict" id="verdict"></div>
+    <div class="num"><b id="big"></b><span id="grade"></span></div>
     <p class="diag" id="diag"></p>
 
-    <div class="rows" id="rows"></div>
+    <div class="checks" id="checks"></div>
 
-    <div class="gate">
-      <h3>Two checks we could not run from here</h3>
-      <p>Everything above is what is on your website. The two below need us to look outside it, and to ask the AI engines about you directly. That is the part of the report that actually tells you whether AI recommends you.</p>
-      <form onsubmit="return sendFull(event)">
+    <div class="mark">
+      <div class="markbox">
+        <div class="t">AI Visibility</div>
+        <div class="v"><span id="bsc"></span> <span id="bgr"></span></div>
+      </div>
+      <div class="grab">
+        <button onclick="cp(this,'md')">Markdown</button>
+        <button onclick="cp(this,'html')">Embed</button>
+        <button onclick="cp(this,'img')">Image</button>
+      </div>
+    </div>
+
+    <div class="rest">
+      <h3>Two things we can't see from out here</h3>
+      <p>Everything above lives on your website. The rest is off it: whether other sources back you up, and what the AI engines say when someone actually asks about your business. That's the part worth reading.</p>
+      <form class="mail" onsubmit="return sendFull(event)">
         <input id="em" type="email" placeholder="you@yourbusiness.com" required>
-        <button class="go" type="submit">Send the full report</button>
+        <button type="submit">Send it →</button>
       </form>
-      <div class="ok" id="ok">On its way. Check your inbox in a few minutes.</div>
+      <div class="sent" id="sent">On its way. Give it a few minutes.</div>
     </div>
   </div>
 </div>
@@ -145,84 +141,86 @@ async function run(e){
     if(!r.ok){ err.textContent = j.error || 'Something went wrong.'; err.style.display='block'; return false; }
     LAST = j; render(j); out.style.display='block';
   }catch(_){ err.textContent = 'Could not reach that site.'; err.style.display='block'; }
-  finally{ btn.disabled=false; btn.textContent='Check my site'; }
+  finally{ btn.disabled=false; btn.textContent='Check →'; }
   return false;
 }
 
 function render(j){
-  const col = j.total>=70 ? 'var(--green)' : j.total>=45 ? 'var(--amber)' : 'var(--red)';
-  document.getElementById('dom').textContent = j.host;
-  document.getElementById('stamp').textContent = 'checked just now · on-page signals';
+  const blocked = j.starBlocked || j.named.length || j.botBlocked;
+  document.getElementById('dom').textContent = j.host + ' · checked just now';
+  document.getElementById('verdict').textContent = blocked
+    ? 'AI is being turned away at the door.'
+    : (j.uniq.length ? 'AI can read you. It still might not name you.'
+                     : 'AI can read you, but has to guess who you are.');
+  document.getElementById('big').textContent = j.total;
+  document.getElementById('grade').textContent = 'out of 100 on what we can see from your site';
   document.getElementById('bsc').textContent = j.total;
   document.getElementById('bgr').textContent = j.grade;
-  document.getElementById('bgr').style.color = col;
-  document.getElementById('big').innerHTML = j.total + '<span class="of">/100</span>';
-  document.getElementById('big').style.color = col;
-
-  const blocked = j.starBlocked || j.named.length || j.botBlocked;
-  document.getElementById('vsub').innerHTML = blocked
-    ? '<span style="color:var(--red)">AI cannot read this site properly.</span>'
-    : (j.total >= 70 ? '<span style="color:var(--green)">Technically readable.</span>'
-                     : '<span style="color:var(--amber)">Readable, with gaps.</span>');
 
   document.getElementById('diag').textContent = blocked
-    ? 'Your site turns away the crawlers that feed AI answers. Everything else matters less until this is fixed.'
+    ? 'Something on your site refuses the crawlers that feed AI answers. Almost nobody chooses this on purpose. It is usually a host or security setting nobody mentioned.'
     : (j.uniq.length
-        ? 'AI can read this site. Whether it will recommend you is a different question, and it is not answerable from your website alone.'
-        : 'AI can reach this site, but there is no structured data telling it what your business actually is, so it has to guess.');
+        ? 'The technical side is in reasonable shape. Whether AI recommends you depends on things that live outside your website.'
+        : 'The crawlers get in, but nothing on the page tells them what your business is, so they infer it from your words.');
 
-  const chip = (ok, t) => '<span class="chip ' + (ok?'ok':'no') + '">' + t + '</span>';
-  const rows = [
-    { q:'Can AI reach your site at all?', pct:Math.round(j.access/40*100),
-      chips: j.starBlocked ? [chip(false,'robots.txt blocks all')] :
-             j.named.length ? j.named.map(n=>chip(false,n+' blocked')) :
-             j.botBlocked ? [chip(false,'serves people, refuses GPTBot')] :
-             [chip(true,'GPTBot'),chip(true,'ClaudeBot'),chip(true,'PerplexityBot')],
-      note: blocked ? 'A host, CDN or security tool is turning AI crawlers away. Usually nobody chose this.'
-                    : 'Every major AI crawler gets a real page back.' },
-    { q:'Does AI know who you are?', pct:Math.round(j.identity/30*100),
-      chips: (j.uniq.length ? j.uniq.slice(0,4).map(t=>chip(true,t)) : [chip(false,'no structured data')])
-             .concat([chip(j.llmsPresent,'llms.txt')]),
-      note: j.hasOrg ? 'You have structured data identifying the business.'
-                     : 'Without Organization data, AI has to infer who you are from page text.' },
-    { q:'Is there anything worth quoting?', pct:Math.round(j.content/30*100),
-      chips:[chip(j.words>=600, j.words.toLocaleString() + ' words to GPTBot')],
-      note: j.words < 250 ? 'Very little readable text reaches the crawler. This is often a rendering problem, not a content one.'
-                          : 'There is real text here for AI to pull from.' }
+  const f = (ok,t) => '<i class="'+(ok?'':'no')+'">'+t+'</i>';
+  const checks = [
+    { q:'Can AI reach your site at all?',
+      v: blocked ? 'blocked' : 'open',
+      bad: blocked,
+      facts: j.starBlocked ? f(false,'robots.txt blocks every crawler')
+           : j.named.length ? j.named.map(n=>f(false,n+' blocked')).join('')
+           : j.botBlocked ? f(false,'loads for people, refuses GPTBot')
+           : f(true,'GPTBot')+f(true,'ClaudeBot')+f(true,'PerplexityBot'),
+      why: blocked ? 'Until this is fixed, nothing else matters much. The crawler never gets to read the rest.'
+                   : 'All three major crawlers get a real page back.' },
+    { q:'Does AI know who you are?',
+      v: j.hasOrg ? 'identified' : (j.uniq.length ? 'partial' : 'nothing'),
+      bad: !j.uniq.length,
+      facts: (j.uniq.length ? j.uniq.slice(0,4).map(t=>f(true,t)).join('') : f(false,'no structured data'))
+             + f(j.llmsPresent,'llms.txt'),
+      why: j.hasOrg ? 'There is machine-readable data saying what this business is.'
+                    : 'Without that, AI works it out from context, and it often works it out wrong.' },
+    { q:'Is there anything worth quoting?',
+      v: j.words >= 600 ? 'plenty' : (j.words >= 250 ? 'thin' : 'almost nothing'),
+      bad: j.words < 250,
+      facts: f(j.words>=600, j.words.toLocaleString()+' words reach the crawler'),
+      why: j.words < 250 ? 'That is far less than a visitor sees. Usually the page renders in the browser but not for the bot.'
+                         : 'There is enough real text here for AI to lift an answer from.' }
   ];
-  const locked = [
-    { q:'Does anyone else confirm you exist?', note:'Needs a check of directories, press, and knowledge bases outside your site.' },
-    { q:'Does AI actually recommend you today?', note:'We ask ChatGPT, Claude, Perplexity and Google AI the questions your buyers ask, and count how often you are named.' }
+  const off = [
+    ['Does anyone else back you up?','not checked','Directories, press and knowledge bases, all outside your site.'],
+    ['Does AI recommend you today?','not checked','We ask the engines the questions your buyers ask, and count how often your name comes back.']
   ];
-  document.getElementById('rows').innerHTML =
-    rows.map(r => '<div class="row"><div class="rtop"><span class="q">'+r.q+'</span><span class="pct" style="color:'+
-      (r.pct>=70?'var(--green)':r.pct>=45?'var(--amber)':'var(--red)')+'">'+r.pct+'/100</span></div>'+
-      '<div class="chips">'+r.chips.join('')+'</div><div class="note">'+r.note+'</div></div>').join('')
-    + locked.map(r => '<div class="row locked"><div class="rtop"><span class="q">'+r.q+
-      '</span><span class="pct">not run</span></div><div class="note">'+r.note+'</div></div>').join('');
+
+  document.getElementById('checks').innerHTML =
+    checks.map(c => '<div class="ck"><div class="ckhead"><span class="ckq">'+c.q+'</span>'+
+      '<span class="ckv'+(c.bad?' bad':'')+'">'+c.v+'</span></div>'+
+      '<div class="facts">'+c.facts+'</div><div class="why">'+c.why+'</div></div>').join('')
+    + off.map(o => '<div class="ck off"><div class="ckhead"><span class="ckq">'+o[0]+
+      '</span><span class="ckv">'+o[1]+'</span></div><div class="why">'+o[2]+'</div></div>').join('');
 }
 
 function cp(btn, kind){
   if(!LAST) return;
-  const url = 'https://www.specularisinc.com/free-audit';
-  const alt = 'AI Visibility ' + LAST.total + '/100 — checked by Specularis';
-  const img = 'https://specularis-mcp-audit-production.up.railway.app/assets/specularis-logo.png';
+  const url='https://www.specularisinc.com/free-audit';
+  const alt='AI Visibility '+LAST.total+'/100 — checked by Specularis';
+  const img='https://specularis-mcp-audit-production.up.railway.app/assets/specularis-logo.png';
   const v = kind==='md' ? '[!['+alt+']('+img+')]('+url+')'
-          : kind==='html' ? '<a href="'+url+'"><img src="'+img+'" alt="'+alt+'"></a>'
-          : img;
+          : kind==='html' ? '<a href="'+url+'"><img src="'+img+'" alt="'+alt+'"></a>' : img;
   navigator.clipboard.writeText(v).then(()=>{
-    const t=btn.textContent; btn.textContent='Copied'; btn.classList.add('done');
+    const t=btn.textContent; btn.textContent='copied'; btn.classList.add('done');
     setTimeout(()=>{ btn.textContent=t; btn.classList.remove('done'); },1400);
   });
 }
 
 async function sendFull(e){
   e.preventDefault();
-  const em = document.getElementById('em').value.trim();
-  if(!em || !LAST) return false;
-  document.getElementById('ok').style.display='block';
-  fetch('/api/full-report', { method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ email: em, domain: LAST.host }) }).catch(()=>{});
+  const em=document.getElementById('em').value.trim();
+  if(!em||!LAST) return false;
+  document.getElementById('sent').style.display='block';
+  fetch('/api/full-report',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email:em,domain:LAST.host})}).catch(()=>{});
   return false;
 }
 </script>
