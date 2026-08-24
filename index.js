@@ -40,6 +40,8 @@ let WHAT_WE_DO_HTML = "";
 try { WHAT_WE_DO_HTML = readFileSync(join(__dirname, "public", "what-we-do.html"), "utf8"); } catch (e) {}
 let SCHEMA_V3_TXT = "";
 try { SCHEMA_V3_TXT = readFileSync(join(__dirname, "public", "schema-v3.txt"), "utf8"); } catch (e) {}
+let SCAN_HTML = "";
+try { SCAN_HTML = readFileSync(join(__dirname, "public", "scan.html"), "utf8"); } catch (e) {}
 let REPORT_V2_HTML = "";
 try { REPORT_V2_HTML = readFileSync(join(__dirname, "public", "report-v2.html"), "utf8"); } catch (e) {}
 let PROOF_CARD_HTML = "";
@@ -122,6 +124,62 @@ const quickSnapshot = async (site) => {
     homeOk: home.ok,
   };
 };
+
+
+// ---- Instant scan: score a site from cheap signals only (no LLM calls) ----
+const scoreSnapshot = async (site) => {
+  const [robots, home, llms] = await Promise.all([
+    fetchWithTimeout(site.origin + "/robots.txt"),
+    fetchWithTimeout(site.url),
+    fetchWithTimeout(site.origin + "/llms.txt"),
+  ]);
+  // browser control: what a normal browser gets vs what GPTBot gets
+  const asBot = await fetchWithTimeout(site.url, { headers: { "User-Agent":
+    "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot" } });
+
+  const robotsText = robots.text || "";
+  const starBlocked = /user-agent:\s*\*[\s\S]*?disallow:\s*\/\s*(\n|$)/i.test(robotsText);
+  const named = ["GPTBot","ClaudeBot","PerplexityBot"].filter((b) => {
+    const blk = robotsText.match(new RegExp("user-agent:\\s*" + b + "[\\s\\S]*?(?=user-agent:|$)", "i"));
+    return blk && /disallow:\s*\/\s*(\n|$)/i.test(blk[0]);
+  });
+  const botBlocked = !asBot.ok && home.ok;           // serves a browser, refuses the bot
+  const text = (asBot.text || home.text || "").replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ");
+  const words = text.split(/\s+/).filter(Boolean).length;
+
+  const types = [];
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let mm; const src = home.text || "";
+  while ((mm = re.exec(src)) !== null) {
+    try { const j = JSON.parse(mm[1]); const arr = Array.isArray(j) ? j : (j["@graph"] || [j]);
+      for (const n of arr) if (n && n["@type"]) types.push([].concat(n["@type"]).join("/")); } catch (e) {}
+  }
+  const uniq = [...new Set(types)];
+  const hasOrg = uniq.some(t => /Organization|LocalBusiness/i.test(t));
+  const hasPerson = uniq.some(t => /Person/i.test(t));
+  const llmsPresent = llms.ok && (llms.text || "").length > 20;
+
+  // ---- scoring (0-100), transparent and cheap ----
+  let access = 40;
+  if (starBlocked) access = 0; else if (named.length) access = 12; else if (botBlocked) access = 8;
+  let identity = 0;
+  if (uniq.length) identity += 12;
+  if (hasOrg) identity += 10;
+  if (hasPerson) identity += 5;
+  if (llmsPresent) identity += 3;
+  let content = 0;
+  if (words >= 1200) content = 30; else if (words >= 600) content = 22;
+  else if (words >= 250) content = 14; else if (words >= 60) content = 7;
+  const total = Math.max(0, Math.min(100, access + identity + content));
+  const grade = total >= 85 ? "A" : total >= 70 ? "B" : total >= 55 ? "C" : total >= 40 ? "D" : "F";
+
+  return { host: site.host, total, grade,
+    access, identity, content,
+    starBlocked, named, botBlocked, words, uniq, hasOrg, hasPerson, llmsPresent,
+    reachable: home.ok };
+};
+
+const esc = (v) => String(v == null ? "" : v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
 const triggerFullAudit = async (payload) => {
   const r = await fetchWithTimeout(N8N_WEBHOOK_URL, { method: "POST", headers: { "Content-Type": "application/json", "x-audit-source": "specularis-mcp" }, body: JSON.stringify(payload) }, 12000);
@@ -539,6 +597,40 @@ app.post("/citation-finder", async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: "internal error" });
   }
+});
+
+
+// Instant scan API — cheap signals only, no LLM cost
+app.get("/api/scan", async (req, res) => {
+  try {
+    const site = normalizeUrl(String(req.query.d || ""));
+    if (!site) return res.status(400).json({ error: "Give me a domain, like example.com" });
+    const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
+    const rl = rateLimitFinder(ip);
+    if (!rl.ok) return res.status(429).json({ error: rl.reason === "daily"
+      ? "This free tool has hit today's limit. Try again tomorrow, or run the full audit."
+      : "That's a few checks in a short window. Give it a minute." });
+    const r = await scoreSnapshot(site);
+    if (!r.reachable && !r.botBlocked) return res.status(502).json({ error: "Could not reach that site. Check the domain and try again." });
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: "Something went wrong on our side." }); }
+});
+
+app.get("/scan", (_req, res) => {
+  if (!SCAN_HTML) return res.status(404).send("Not found");
+  res.type("html").send(SCAN_HTML);
+});
+
+// Hand off to the existing n8n audit for the full scored report
+app.post("/api/full-report", async (req, res) => {
+  try {
+    const { email, domain } = req.body || {};
+    if (!email || !domain) return res.status(400).json({ error: "email and domain required" });
+    const site = normalizeUrl(domain);
+    if (!site) return res.status(400).json({ error: "bad domain" });
+    const ok = await triggerFullAudit({ name: String(email).split("@")[0], email, website_url: site.url, role: "Other" });
+    res.json({ ok });
+  } catch (e) { res.status(500).json({ error: "internal error" }); }
 });
 
 // Add-ons tab switcher — embedded by URL on the pricing section (interactive)
