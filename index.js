@@ -304,6 +304,37 @@ const mcpAllow = () => {
 
 // Core of the citation finder — used by both the web endpoint and the MCP tool.
 // Queries Perplexity + Claude, merges cited sources, and checks whether `domain` appears in each.
+
+// Derive a buyer-intent query from the site itself (cheap: no LLM, reads the page)
+const inferBuyerQuery = async (site) => {
+  const home = await fetchWithTimeout(site.url);
+  const h = home.text || "";
+  const title = (h.match(/<title[^>]*>([^<]{3,120})<\/title>/i)?.[1] || "").trim();
+  const desc  = (h.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{10,200})/i)?.[1] || "").trim();
+  let city = "", type = "";
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(h)) !== null) {
+    try {
+      const j = JSON.parse(m[1]); const arr = Array.isArray(j) ? j : (j["@graph"] || [j]);
+      for (const n of arr) {
+        if (!n || !n["@type"]) continue;
+        const t = [].concat(n["@type"]).join(" ");
+        if (/LocalBusiness|Organization|ProfessionalService|RealEstate/i.test(t)) {
+          const a = n.address || {};
+          city = city || a.addressLocality || "";
+          if (!type && !/^Organization$/i.test(t)) type = t.replace(/([a-z])([A-Z])/g, "$1 $2");
+        }
+      }
+    } catch (e) {}
+  }
+  const src = (title + " " + desc).replace(/\s+/g, " ").trim();
+  if (!city) city = (src.match(/\b(?:in|serving|near)\s+([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)?)/)?.[1] || "");
+  const noun = type || (src.split(/[|\u2013\u2014\-·,.]/)[0] || "").trim().slice(0, 60) || site.host;
+  return { query: ("best " + noun + (city ? " in " + city : "")).replace(/\s+/g," ").trim().slice(0,120),
+           title, city, noun };
+};
+
 const runCitationFinder = async (query, domain) => {
   const site = normalizeUrl(domain);
   const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
@@ -628,8 +659,42 @@ app.post("/api/full-report", async (req, res) => {
     if (!email || !domain) return res.status(400).json({ error: "email and domain required" });
     const site = normalizeUrl(domain);
     if (!site) return res.status(400).json({ error: "bad domain" });
-    const ok = await triggerFullAudit({ name: String(email).split("@")[0], email, website_url: site.url, role: "Other" });
-    res.json({ ok });
+    const bare = site.host.replace(/^www\./, "");
+
+    // 1) kick off the full n8n audit so the PDF still lands in their inbox
+    triggerFullAudit({ name: String(email).split("@")[0], email, website_url: site.url, role: "Other" })
+      .catch(() => {});
+
+    if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) {
+      return res.json({ emailed: true, live: false, note: "Full report is on its way by email." });
+    }
+
+    // 2) run the two locked checks live so the page can unlock in place
+    const inferred = await inferBuyerQuery(site);
+    const [ident, rec] = await Promise.all([
+      runCitationFinder("What is " + bare + "? Who runs it and what do they do?", bare),
+      runCitationFinder(inferred.query, bare),
+    ]);
+
+    const identOk = !ident.error;
+    const recOk = !rec.error;
+    const answer = (identOk && ident.answer) || "";
+    const namedInAnswer = answer.toLowerCase().includes(bare.split(".")[0].toLowerCase());
+
+    res.json({
+      emailed: true, live: true,
+      backing: identOk ? {
+        sources: ident.total, mentioning: ident.inCount,
+        recognised: namedInAnswer,
+        answer: answer.slice(0, 400),
+        engines: ident.engines
+      } : null,
+      recommended: recOk ? {
+        query: rec.query, sources: rec.total, named: rec.inCount,
+        engines: rec.engines,
+        cited: rec.sources.slice(0, 6).map(s => ({ host: s.host, type: s.type, you: !!s.appearsYou }))
+      } : null
+    });
   } catch (e) { res.status(500).json({ error: "internal error" }); }
 });
 

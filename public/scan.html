@@ -189,16 +189,16 @@ function render(j){
                          : 'There is enough real text here for AI to lift an answer from.' }
   ];
   const off = [
-    ['Does anyone else back you up?','not checked','Directories, press and knowledge bases, all outside your site.'],
-    ['Does AI recommend you today?','not checked','We ask the engines the questions your buyers ask, and count how often your name comes back.']
+    ['backing','Does anyone else back you up?','locked','Directories, press and knowledge bases, all outside your site.'],
+    ['rec','Does AI recommend you today?','locked','We ask the engines the questions your buyers ask, and count how often your name comes back.']
   ];
 
   document.getElementById('checks').innerHTML =
     checks.map(c => '<div class="ck"><div class="ckhead"><span class="ckq">'+c.q+'</span>'+
       '<span class="ckv'+(c.bad?' bad':'')+'">'+c.v+'</span></div>'+
       '<div class="facts">'+c.facts+'</div><div class="why">'+c.why+'</div></div>').join('')
-    + off.map(o => '<div class="ck off"><div class="ckhead"><span class="ckq">'+o[0]+
-      '</span><span class="ckv">'+o[1]+'</span></div><div class="why">'+o[2]+'</div></div>').join('');
+    + off.map(o => '<div class="ck off" id="ck-'+o[0]+'"><div class="ckhead"><span class="ckq">'+o[1]+
+      '</span><span class="ckv">'+o[2]+'</span></div><div class="why">'+o[3]+'</div></div>').join('');
 }
 
 function cp(btn, kind){
@@ -218,10 +218,67 @@ async function sendFull(e){
   e.preventDefault();
   const em=document.getElementById('em').value.trim();
   if(!em||!LAST) return false;
-  document.getElementById('sent').style.display='block';
-  fetch('/api/full-report',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({email:em,domain:LAST.host})}).catch(()=>{});
+  const sent=document.getElementById('sent');
+  sent.style.display='block';
+  sent.textContent='Asking ChatGPT, Claude and Perplexity about you. This takes a moment.';
+  setRow('backing','checking…','Querying the engines and reading what they cite.');
+  setRow('rec','checking…','Running a buyer-intent search for your category.');
+  try{
+    const r = await fetch('/api/full-report',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:em,domain:LAST.host})});
+    const j = await r.json();
+    if(!j.live){ sent.textContent='The full report is on its way to your inbox.'; return false; }
+    unlock(j);
+    sent.textContent='Unlocked below. The full written report is also on its way to your inbox.';
+  }catch(_){ sent.textContent='The full report is on its way to your inbox.'; }
   return false;
+}
+
+function setRow(id, val, why){
+  const el=document.getElementById('ck-'+id); if(!el) return;
+  el.querySelector('.ckv').textContent=val;
+  el.querySelector('.why').textContent=why;
+}
+
+function unlock(j){
+  const f=(ok,t)=>'<i class="'+(ok?'':'no')+'">'+t+'</i>';
+  const b=j.backing, r=j.recommended;
+
+  if(b){
+    const el=document.getElementById('ck-backing');
+    el.classList.remove('off');
+    const good=b.recognised && b.mentioning>0;
+    el.querySelector('.ckv').textContent = good ? 'confirmed' : (b.recognised ? 'thin' : 'not recognised');
+    el.querySelector('.ckv').classList.toggle('bad', !good);
+    el.querySelector('.why').insertAdjacentHTML('beforebegin',
+      '<div class="facts">'+f(b.recognised,'AI identifies the business')+
+      f(b.mentioning>0, b.mentioning+' of '+b.sources+' cited sources mention you')+'</div>');
+    el.querySelector('.why').textContent = b.recognised
+      ? (b.mentioning>0 ? 'Other sources back you up, which is what lets AI name you with confidence.'
+                        : 'AI knows the name but almost nothing independent confirms it. That is the gap.')
+      : 'When asked directly, AI could not confidently say who you are. Nothing outside your own site anchors the name.';
+    if(b.answer){
+      el.insertAdjacentHTML('beforeend','<div class="why" style="border-left:2px solid var(--rule);padding-left:12px;margin-top:12px">'+
+        '“'+b.answer.replace(/</g,'&lt;').slice(0,260)+'…”</div>');
+    }
+  }
+
+  if(r){
+    const el=document.getElementById('ck-rec');
+    el.classList.remove('off');
+    const named = r.named>0;
+    el.querySelector('.ckv').textContent = named ? (r.named+' of '+r.sources) : 'not named';
+    el.querySelector('.ckv').classList.toggle('bad', !named);
+    el.querySelector('.why').insertAdjacentHTML('beforebegin',
+      '<div class="facts">'+f(true,'“'+r.query+'”')+f(named, named ? 'you appear in '+r.named+' cited sources' : 'you appear in none of the cited sources')+'</div>');
+    el.querySelector('.why').textContent = named
+      ? 'You show up in what the engines cite for that question. That is the thing worth protecting.'
+      : 'We asked what your buyers would ask. The engines cited '+r.sources+' sources and you were not in any of them.';
+    if(r.cited && r.cited.length){
+      el.insertAdjacentHTML('beforeend','<div class="facts" style="margin-top:12px">'+
+        r.cited.map(c=>f(c.you, c.host)).join('')+'</div>');
+    }
+  }
 }
 </script>
 </body>
