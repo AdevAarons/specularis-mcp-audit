@@ -261,6 +261,7 @@ function render(j){
     { q:'Can AI reach your site at all?',
       v: blocked ? 'blocked' : 'open',
       bad: blocked,
+      state: blocked ? 'fail' : (j.access >= 40 ? 'pass' : 'weak'),
       facts: j.starBlocked ? f(false,'robots.txt blocks every crawler')
            : j.named.length ? j.named.map(n=>f(false,n+' blocked')).join('')
            : j.botBlocked ? f(false,'loads for people, refuses GPTBot')
@@ -270,6 +271,7 @@ function render(j){
     { q:'Does AI know who you are?',
       v: j.hasOrg ? 'identified' : (j.uniq.length ? 'partial' : 'nothing'),
       bad: !j.uniq.length,
+      state: !j.uniq.length ? 'fail' : (j.identity >= 24 ? 'pass' : 'weak'),
       facts: (j.uniq.length ? j.uniq.slice(0,4).map(t=>f(true,t)).join('') : f(false,'no structured data'))
              + f(j.llmsPresent,'llms.txt'),
       why: j.hasOrg ? 'There is machine-readable data saying what this business is.'
@@ -277,6 +279,7 @@ function render(j){
     { q:'Is there anything worth quoting?',
       v: j.words >= 600 ? 'plenty' : (j.words >= 250 ? 'thin' : 'almost nothing'),
       bad: j.words < 250,
+      state: j.words < 250 ? 'fail' : (j.content >= 30 && !j.renderGap ? 'pass' : 'weak'),
       facts: f(j.words>=600, j.words.toLocaleString()+' words reach the crawler'),
       why: j.words < 250 ? 'That is far less than a visitor sees. Usually the page renders in the browser but not for the bot.'
                          : 'There is enough real text here for AI to lift an answer from.' }
@@ -311,11 +314,12 @@ function render(j){
   }).join('');
 
   // ---- by status ----
-  const pass = checks.filter(c=>!c.bad), fail = checks.filter(c=>c.bad);
   const grp = (title, items) => items.length ? '<div class="grp"><h4>'+title+'</h4><ul>'+
     items.map(i=>'<li><b>'+i.q+'</b><span>'+i.v+'</span></li>').join('')+'</ul></div>' : '';
   document.getElementById('statuses').innerHTML =
-    grp('Passing', pass) + grp('Needs attention', fail) +
+    grp('Passing', checks.filter(c=>c.state==='pass')) +
+    grp('Partly there', checks.filter(c=>c.state==='weak')) +
+    grp('Needs attention', checks.filter(c=>c.state==='fail')) +
     grp('Locked until you unlock them', off.map(o=>({q:o[1],v:'locked'})));
 
   lens('goal');
