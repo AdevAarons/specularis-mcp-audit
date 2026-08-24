@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Visibility Report — Specularis</title>
+<style>
+  :root{
+    --blue:#2467E3; --blue-lt:#4d86ff; --ink:#141414; --muted:#6b7280; --line:#e7e9ee;
+    --bg:#faf9f7; --card:#ffffff;
+    --red:#e0533d; --amber:#e0952f; --green:#2f9e5e;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--bg); color:var(--ink); line-height:1.55;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
+  .wrap{ max-width:880px; margin:0 auto; padding:34px 22px 70px; }
+  .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+
+  /* header row */
+  .top{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-bottom:34px; }
+  .site{ font-size:27px; font-weight:700; letter-spacing:-.02em; }
+  .meta{ font-size:12.5px; color:var(--muted); margin-top:4px; }
+
+  /* badge */
+  .badge{ background:#141414; color:#fff; border-radius:12px; padding:14px 18px; min-width:210px; }
+  .badge .row1{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .badge .vf{ font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:#c9cdd4; }
+  .badge .sc{ font-size:20px; font-weight:800; }
+  .badge .sc .g{ color:var(--amber); }
+  .badge .row2{ display:flex; justify-content:space-between; font-size:10.5px; color:#7b8290; margin-top:9px; letter-spacing:.1em; }
+  .copyrow{ display:flex; gap:6px; margin-top:10px; }
+  .copyrow button{ flex:1; font:inherit; font-size:11px; font-weight:700; padding:6px 4px; border-radius:7px;
+    border:1px solid var(--line); background:#fff; color:#4b5563; cursor:pointer; transition:all .14s ease; }
+  .copyrow button:hover{ border-color:var(--blue); color:var(--blue); }
+  .copyrow button.done{ background:var(--blue); color:#fff; border-color:var(--blue); }
+
+  /* score block */
+  .scoreline{ display:flex; align-items:flex-start; gap:28px; flex-wrap:wrap; }
+  .big{ font-size:96px; font-weight:800; line-height:.9; letter-spacing:-.045em; color:var(--amber); }
+  .big .of{ font-size:34px; color:#c3c7cf; font-weight:700; letter-spacing:-.02em; }
+  .verdict{ padding-top:10px; }
+  .verdict .grade{ font-size:15px; font-weight:800; color:var(--amber); }
+  .verdict .rank{ font-size:12.5px; color:var(--muted); margin-top:3px; }
+  .actions{ margin-left:auto; padding-top:8px; display:grid; gap:7px; }
+  .actions a{ font-size:13.5px; color:var(--ink); text-decoration:none; font-weight:600; }
+  .actions a:hover{ color:var(--blue); }
+
+  .diag{ font-size:17px; margin:20px 0 22px; max-width:60ch; }
+
+  /* sub-score bars */
+  .bars{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:38px; }
+  @media(max-width:640px){ .bars{ grid-template-columns:repeat(2,1fr); } }
+  .bar .track{ height:6px; border-radius:4px; background:#e9ebf0; overflow:hidden; }
+  .bar .fill{ height:6px; border-radius:4px; }
+  .bar .nm{ font-size:12.5px; color:var(--muted); margin-top:8px; }
+  .bar .vl{ font-size:12.5px; font-weight:700; }
+
+  /* goal sections */
+  .goals{ border-top:1px solid var(--line); }
+  .goal{ border-bottom:1px solid var(--line); padding:20px 2px; }
+  .goal .hd{ display:flex; align-items:center; gap:14px; cursor:pointer; }
+  .goal .n{ font-size:14px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .goal .q{ font-size:17px; font-weight:600; flex:1; }
+  .goal .pct{ font-size:14px; font-weight:800; font-family:ui-monospace,monospace; }
+  .goal .car{ color:var(--muted); font-size:12px; transition:transform .2s ease; }
+  .goal.open .car{ transform:rotate(90deg); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:11px; }
+  .chip{ font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:700;
+    padding:3px 8px; border-radius:5px; background:#f1f3f7; color:#77808f; }
+  .chip.ok{ background:#e8f6ee; color:#2f9e5e; } .chip.no{ background:#fdeceb; color:#e0533d; }
+  .body{ display:none; margin-top:13px; font-size:14.5px; color:#3f4550; max-width:66ch; }
+  .goal.open .body{ display:block; }
+  .body .fix{ margin-top:9px; padding-left:13px; border-left:2px solid var(--blue); }
+  .body .fix b{ color:var(--ink); }
+
+  /* cta */
+  .cta{ margin-top:36px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:26px 28px; }
+  .cta h3{ font-size:19px; margin-bottom:6px; letter-spacing:-.01em; }
+  .cta p{ color:var(--muted); font-size:14.5px; margin-bottom:18px; max-width:56ch; }
+  .btn{ display:inline-block; background:var(--blue); color:#fff; text-decoration:none; font-weight:700;
+    font-size:15px; padding:13px 24px; border-radius:30px; transition:transform .14s ease, background .14s ease; }
+  .btn:hover{ transform:translateY(-2px); background:var(--blue-lt); }
+  .foot{ margin-top:26px; font-size:12.5px; color:#9aa1ad; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div>
+      <div class="site">specularisinc.com</div>
+      <div class="meta mono">ai visibility report · scanned Aug 2026 · 5 pillars</div>
+    </div>
+    <div>
+      <div class="badge">
+        <div class="row1">
+          <span class="vf">Verified</span>
+          <span class="sc">77 <span class="g">C</span></span>
+        </div>
+        <div class="row2 mono"><span>SPECULARIS</span><span>2026</span></div>
+      </div>
+      <div class="copyrow">
+        <button onclick="cp(this,'md')">Copy MD</button>
+        <button onclick="cp(this,'html')">Copy HTML</button>
+        <button onclick="cp(this,'img')">Copy IMG</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="scoreline">
+    <div class="big">77<span class="of">/100</span></div>
+    <div class="verdict">
+      <div class="grade">C · Readable, not yet recommended</div>
+      <div class="rank mono">stronger than 61% of sites we've audited</div>
+    </div>
+    <div class="actions">
+      <a href="https://www.specularisinc.com/free-audit" target="_top">Rescan →</a>
+      <a href="https://calendly.com/specularisinc" target="_blank" rel="noopener">Get the fixes done →</a>
+      <a href="https://www.specularisinc.com/articles/ai-visibility-statistics" target="_top">How we score →</a>
+    </div>
+  </div>
+
+  <p class="diag">AI can read this site fine. What it cannot do yet is confirm who you are, because almost nothing outside your own domain backs you up.</p>
+
+  <div class="bars">
+    <div class="bar"><div class="track"><div class="fill" style="width:95%;background:var(--green)"></div></div><div class="nm">Access</div><div class="vl">19/20</div></div>
+    <div class="bar"><div class="track"><div class="fill" style="width:85%;background:var(--green)"></div></div><div class="nm">Identity</div><div class="vl">17/20</div></div>
+    <div class="bar"><div class="track"><div class="fill" style="width:80%;background:var(--amber)"></div></div><div class="nm">Content</div><div class="vl">16/20</div></div>
+    <div class="bar"><div class="track"><div class="fill" style="width:45%;background:var(--red)"></div></div><div class="nm">Corroboration</div><div class="vl">9/20</div></div>
+  </div>
+
+  <div class="goals">
+
+    <div class="goal open" onclick="this.classList.toggle('open')">
+      <div class="hd"><span class="n mono">1</span><span class="q">Can AI reach your site at all?</span><span class="pct" style="color:var(--green)">95/100</span><span class="car">▸</span></div>
+      <div class="chips"><span class="chip ok">GPTBot</span><span class="chip ok">ClaudeBot</span><span class="chip ok">PerplexityBot</span><span class="chip ok">robots.txt</span><span class="chip ok">no firewall block</span></div>
+      <div class="body">
+        Every major AI crawler gets a full page. We fetched your homepage as GPTBot and got 1,604 words back, with no firewall or Cloudflare challenge in the way.
+        <div class="fix"><b>Keep it that way.</b> A host, CDN or security vendor can start blocking AI bots without ever touching robots.txt. Re-check after any change.</div>
+      </div>
+    </div>
+
+    <div class="goal" onclick="this.classList.toggle('open')">
+      <div class="hd"><span class="n mono">2</span><span class="q">Does AI know who you are?</span><span class="pct" style="color:var(--green)">85/100</span><span class="car">▸</span></div>
+      <div class="chips"><span class="chip ok">Organization</span><span class="chip ok">Person</span><span class="chip ok">WebSite</span><span class="chip ok">FAQPage</span><span class="chip ok">logo</span><span class="chip ok">headshot</span></div>
+      <div class="body">
+        Your structured data is in good shape. Organization, Person, WebSite and FAQPage are all present, and the logo and founder image both resolve.
+        <div class="fix"><b>Next:</b> keep every profile matching this exactly. One mismatched title or address across sources makes models hedge instead of naming you.</div>
+      </div>
+    </div>
+
+    <div class="goal" onclick="this.classList.toggle('open')">
+      <div class="hd"><span class="n mono">3</span><span class="q">Is there anything worth quoting?</span><span class="pct" style="color:var(--amber)">80/100</span><span class="car">▸</span></div>
+      <div class="chips"><span class="chip ok">1,604 words</span><span class="chip ok">FAQ schema</span><span class="chip no">comparison pages</span><span class="chip no">buyer guides</span></div>
+      <div class="body">
+        The homepage serves 1,604 words of clean text, up from 8 before a prerender bug was caught. FAQ schema gives AI ready-made answers to lift.
+        <div class="fix"><b>The gap is breadth.</b> Comparison pages, definitions and buyer guides are the formats AI quotes, and they get cited even when they never rank in the top ten.</div>
+      </div>
+    </div>
+
+    <div class="goal" onclick="this.classList.toggle('open')">
+      <div class="hd"><span class="n mono">4</span><span class="q">Does anyone else confirm you exist?</span><span class="pct" style="color:var(--red)">45/100</span><span class="car">▸</span></div>
+      <div class="chips"><span class="chip ok">LinkedIn</span><span class="chip no">Wikidata</span><span class="chip no">Crunchbase</span><span class="chip no">press</span><span class="chip no">podcasts</span></div>
+      <div class="body">
+        This is the real gap. Ask Perplexity what Specularis is and it still reaches for an ancient Roman mineral, because too few independent sources confirm the company.
+        <div class="fix"><b>The fix is people, not code.</b> A Wikidata and Crunchbase entity, earned press, a few podcast appearances. AI will not confidently name a business it cannot tell apart from something else.</div>
+      </div>
+    </div>
+
+    <div class="goal" onclick="this.classList.toggle('open')">
+      <div class="hd"><span class="n mono">5</span><span class="q">Does AI actually recommend you today?</span><span class="pct" style="color:var(--red)">0/100</span><span class="car">▸</span></div>
+      <div class="chips"><span class="chip no">ChatGPT</span><span class="chip no">Claude</span><span class="chip no">Perplexity</span><span class="chip no">Google AI</span></div>
+      <div class="body">
+        We asked all four engines the questions your buyers ask. You were named in zero of them. That is the number everything above is in service of.
+        <div class="fix"><b>This is the scoreboard.</b> Fix 4, and this one follows. We re-run it monthly so you can watch it move.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="cta">
+    <h3>Want this fixed rather than just measured?</h3>
+    <p>Most of the technical work takes one session. The corroboration gap takes about 90 days, because it depends on other people publishing.</p>
+    <a href="https://calendly.com/specularisinc" target="_blank" rel="noopener" class="btn">Book a strategy call →</a>
+  </div>
+
+  <div class="foot">Scored from publicly available signals. Every check is reproducible: you can run the same queries yourself and get the same answer.</div>
+</div>
+
+<script>
+  const BADGE = {
+    md:   '[![AI Visibility 77/100](https://specularis-mcp-audit-production.up.railway.app/assets/specularis-logo.png)](https://specularisinc.com/free-audit)',
+    html: '<a href="https://specularisinc.com/free-audit"><img src="https://specularis-mcp-audit-production.up.railway.app/assets/specularis-logo.png" alt="AI Visibility 77/100 — Specularis"></a>',
+    img:  'https://specularis-mcp-audit-production.up.railway.app/assets/specularis-logo.png'
+  };
+  function cp(btn, kind){
+    navigator.clipboard.writeText(BADGE[kind]).then(()=>{
+      const t = btn.textContent; btn.textContent = 'Copied'; btn.classList.add('done');
+      setTimeout(()=>{ btn.textContent = t; btn.classList.remove('done'); }, 1400);
+    });
+  }
+</script>
+</body>
+</html>

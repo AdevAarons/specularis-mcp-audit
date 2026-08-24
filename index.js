@@ -40,6 +40,8 @@ let WHAT_WE_DO_HTML = "";
 try { WHAT_WE_DO_HTML = readFileSync(join(__dirname, "public", "what-we-do.html"), "utf8"); } catch (e) {}
 let SCHEMA_V3_TXT = "";
 try { SCHEMA_V3_TXT = readFileSync(join(__dirname, "public", "schema-v3.txt"), "utf8"); } catch (e) {}
+let REPORT_V2_HTML = "";
+try { REPORT_V2_HTML = readFileSync(join(__dirname, "public", "report-v2.html"), "utf8"); } catch (e) {}
 let PROOF_CARD_HTML = "";
 try { PROOF_CARD_HTML = readFileSync(join(__dirname, "public", "proof-card.html"), "utf8"); } catch (e) {}
 let PRICING_SWITCHER_HTML = "";
@@ -569,6 +571,12 @@ app.get("/what-we-do", (_req, res) => {
 app.get("/schema-v3.txt", (_req, res) => {
   if (!SCHEMA_V3_TXT) return res.status(404).send("Not found");
   res.type("text/plain; charset=utf-8").send(SCHEMA_V3_TXT);
+});
+
+// Ora-style audit report v2 (goal-framed, with badge export)
+app.get("/report-v2", (_req, res) => {
+  if (!REPORT_V2_HTML) return res.status(404).send("Not found");
+  res.type("html").send(REPORT_V2_HTML);
 });
 
 // Social-proof result card (screenshot for LinkedIn)
