@@ -309,30 +309,47 @@ const mcpAllow = () => {
 const inferBuyerQuery = async (site) => {
   const home = await fetchWithTimeout(site.url);
   const h = home.text || "";
-  const title = (h.match(/<title[^>]*>([^<]{3,120})<\/title>/i)?.[1] || "").trim();
-  const desc  = (h.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{10,200})/i)?.[1] || "").trim();
-  let city = "", type = "";
+  const title = (h.match(/<title[^>]*>([^<]{3,140})<\/title>/i)?.[1] || "").trim();
+  const desc  = (h.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{10,240})/i)?.[1] || "").trim();
+  let city = "";
   const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let m;
   while ((m = re.exec(h)) !== null) {
     try {
       const j = JSON.parse(m[1]); const arr = Array.isArray(j) ? j : (j["@graph"] || [j]);
-      for (const n of arr) {
-        if (!n || !n["@type"]) continue;
-        const t = [].concat(n["@type"]).join(" ");
-        if (/LocalBusiness|Organization|ProfessionalService|RealEstate/i.test(t)) {
-          const a = n.address || {};
-          city = city || a.addressLocality || "";
-          if (!type && !/^Organization$/i.test(t)) type = t.replace(/([a-z])([A-Z])/g, "$1 $2");
+      for (const n of arr) { const a = (n && n.address) || {}; if (a.addressLocality) { city = a.addressLocality; break; } }
+    } catch (e) {}
+  }
+
+  // Ask Claude for one buyer-intent query. It is one short call and far better than string slicing.
+  if (ANTHROPIC_API_KEY) {
+    const prompt = "A business has this homepage.\n\nTitle: " + title + "\nDescription: " + desc +
+      (city ? "\nCity: " + city : "") +
+      "\n\nWrite the ONE search question a potential customer would ask an AI assistant when looking for a business like this, " +
+      "without knowing this company exists. Use the category of service, never the brand name. " +
+      "Format it like a real question, for example: who are the best real estate agents in Tampa. " +
+      "Reply with the question only, no quotes, no preamble, under 90 characters.";
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-opus-5", max_tokens: 60, messages: [{ role: "user", content: prompt }] }),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        const t = (j.content || []).filter(b => b.type === "text").map(b => b.text).join(" ").trim()
+          .replace(/^["'\s]+|["'\s.]+$/g, "");
+        const brand = site.host.replace(/^www\./, "").split(".")[0].toLowerCase();
+        if (t && t.length > 8 && t.length < 130 && !t.toLowerCase().includes(brand)) {
+          return { query: t, title, city, via: "claude" };
         }
       }
     } catch (e) {}
   }
-  const src = (title + " " + desc).replace(/\s+/g, " ").trim();
-  if (!city) city = (src.match(/\b(?:in|serving|near)\s+([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)?)/)?.[1] || "");
-  const noun = type || (src.split(/[|\u2013\u2014\-·,.]/)[0] || "").trim().slice(0, 60) || site.host;
-  return { query: ("best " + noun + (city ? " in " + city : "")).replace(/\s+/g," ").trim().slice(0,120),
-           title, city, noun };
+
+  // fallback: crude but safe
+  const noun = (desc || title).replace(/\s+/g, " ").split(/[|\u2013\u2014\-·,.]/)[0].trim().slice(0, 48);
+  return { query: ("who are the best " + (noun || "providers") + (city ? " in " + city : "")).slice(0, 120), title, city, via: "fallback" };
 };
 
 const runCitationFinder = async (query, domain) => {
