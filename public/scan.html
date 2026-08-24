@@ -358,7 +358,7 @@ function renderBench(j){
 
   const note = [];
   note.push('This score covers what AI can see when it visits a site: whether it gets in, whether it can tell who you are, and whether there is anything to read. It does not include the two off-site checks, which are the harder ones.');
-  note.push('We run our own site through it on the same schedule and score 100, because we built the site against these checks. They are the same checks we run on yours, and you can verify every one of them yourself.');
+  note.push('We keep our own site off this table on purpose. It scores 100 on these three checks, because we built it against them, but our full audit grades five pillars including off-site corroboration and puts the same domain at 77. Ranking ourselves first on the easy three would not tell you anything.');
   if(b.skipped) note.push(b.skipped+' more well-known sites refused our request no matter who we said we were, including a plain browser. We left them off rather than score them a zero we could not stand behind.');
   document.getElementById('benchnote').textContent = note.join(' ');
 

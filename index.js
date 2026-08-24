@@ -841,11 +841,12 @@ app.get("/badge.svg", async (req, res) => {
 
 
 // ---- Benchmarks: well-known sites, scored with the same scan, cached 24h ----
-// Our own site is scored by the same five checks as everyone else, on the same
-// schedule, with no special casing. It ranks wherever it ranks.
+// We deliberately do NOT rank ourselves here. This list scores three on-site
+// checks with a ceiling we built our own site to hit, so our 100 would top the
+// table while our full five-pillar audit puts the same domain at 77. Publishing
+// the flattering number next to everyone else's is not a benchmark, it is an ad.
+// The honest self-score is stated in the note under the table instead.
 const BENCH_LIST = [
-  { d: "specularisinc.com", cat: "AI visibility", us: true },
-
   // Real estate — the niche the metro studies cover
   { d: "compass.com", cat: "Real estate" },
   { d: "redfin.com", cat: "Real estate" },
