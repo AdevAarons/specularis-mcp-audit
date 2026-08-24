@@ -9,7 +9,7 @@
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
 <style>
   :root{ --blue:#2467E3; --ink:#111214; --mid:#5b6167; --soft:#8c9298; --rule:#dfe1e5;
-         --bg:#fdfdfc; --fail:#b3402c; }
+         --bg:#fdfdfc; --fail:#b3402c; --warn:#b07d1f; --good:#2f7d52; }
   *{ box-sizing:border-box; margin:0; padding:0; }
   body{ background:var(--bg); color:var(--ink); line-height:1.5;
     font-family:Satoshi,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
@@ -29,21 +29,32 @@
   .hint{ font-size:13px; color:var(--soft); margin-top:12px; }
 
   #out{ display:none; margin-top:64px; }
-  .err{ display:none; margin-top:24px; color:var(--fail); font-size:15px; }
+  .err{ display:none; margin-top:24px; color:var(--fail); font-size:15px; max-width:58ch; }
 
-  /* verdict */
+  /* headline result */
   .dom{ font-size:14px; font-weight:600; color:var(--mid); letter-spacing:-.01em; }
-  .verdict{ font-size:clamp(24px,3.6vw,32px); font-weight:700; letter-spacing:-.03em; line-height:1.2;
-    margin:10px 0 0; max-width:22ch; }
-  .num{ display:flex; align-items:baseline; gap:10px; margin:26px 0 4px; }
-  .num b{ font-size:56px; font-weight:700; letter-spacing:-.05em; line-height:1; }
-  .num span{ font-size:15px; color:var(--soft); }
-  .diag{ color:var(--mid); font-size:16px; margin-top:16px; max-width:56ch; }
+  .score{ display:flex; align-items:baseline; gap:14px; margin:20px 0 0; flex-wrap:wrap; }
+  .score b{ font-size:72px; font-weight:700; letter-spacing:-.055em; line-height:.95; }
+  .score .of{ font-size:16px; color:var(--soft); }
+  .score .lab{ font-size:15px; font-weight:700; letter-spacing:-.01em; }
+  .rank{ font-size:14px; color:var(--mid); margin-top:16px; }
+  .rank b{ font-weight:700; color:var(--ink); }
+  .verdict{ font-size:clamp(21px,3vw,27px); font-weight:700; letter-spacing:-.03em; line-height:1.22;
+    margin:22px 0 0; max-width:24ch; }
+  .diag{ color:var(--mid); font-size:16px; margin-top:14px; max-width:58ch; }
+
+  /* lens toggle */
+  .lens{ display:flex; gap:22px; margin-top:44px; padding-bottom:10px; border-bottom:1px solid var(--rule); }
+  .lens button{ font:inherit; font-size:13.5px; font-weight:600; border:0; background:none; padding:0;
+    color:var(--soft); cursor:pointer; letter-spacing:-.005em; }
+  .lens button.on{ color:var(--ink); }
+  .lens button:hover{ color:var(--ink); }
+
+  .view{ display:none; }
+  .view.on{ display:block; }
 
   /* checks */
-  .checks{ margin-top:46px; }
-  .ck{ padding:22px 0; border-top:1px solid var(--rule); }
-  .ck:last-child{ border-bottom:1px solid var(--rule); }
+  .ck{ padding:22px 0; border-bottom:1px solid var(--rule); }
   .ckhead{ display:flex; align-items:baseline; gap:16px; }
   .ckq{ font-size:16.5px; font-weight:600; flex:1; letter-spacing:-.01em; }
   .ckv{ font-size:13px; font-weight:700; color:var(--mid); white-space:nowrap; }
@@ -54,12 +65,38 @@
   .facts i:first-child::before{ content:""; margin:0; }
   .facts i.no{ color:var(--fail); }
   .why{ font-size:14.5px; color:var(--mid); margin-top:10px; max-width:60ch; }
-
   .ck.off .ckq{ color:var(--soft); }
   .ck.off .ckv{ color:var(--soft); font-weight:600; }
 
+  /* layer bars */
+  .lay{ padding:20px 0; border-bottom:1px solid var(--rule); }
+  .layhead{ display:flex; align-items:baseline; gap:14px; }
+  .layq{ font-size:16px; font-weight:600; flex:1; letter-spacing:-.01em; }
+  .layn{ font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .bar{ height:3px; background:var(--rule); margin-top:12px; }
+  .bar span{ display:block; height:3px; }
+  .laywhy{ font-size:14px; color:var(--mid); margin-top:10px; max-width:60ch; }
+
+  /* status groups */
+  .grp{ margin-top:26px; }
+  .grp h4{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--soft); font-weight:700; }
+  .grp ul{ list-style:none; margin-top:10px; }
+  .grp li{ padding:11px 0; border-bottom:1px solid var(--rule); font-size:15px; color:var(--mid);
+    display:flex; gap:14px; align-items:baseline; }
+  .grp li b{ color:var(--ink); font-weight:600; flex:1; }
+
+  /* unlock */
+  .rest{ margin-top:46px; padding-top:28px; border-top:1.5px solid var(--ink); }
+  .rest h3{ font-size:19px; font-weight:700; letter-spacing:-.022em; }
+  .rest p{ color:var(--mid); font-size:15px; margin:10px 0 22px; max-width:58ch; }
+  form.mail{ display:flex; gap:0; border-bottom:1.5px solid var(--ink); max-width:440px; }
+  form.mail input{ flex:1; font:inherit; font-size:16px; padding:10px 2px; border:0; background:none; outline:none; }
+  form.mail button{ font:inherit; font-size:14px; font-weight:700; padding:10px 0 10px 18px; border:0;
+    background:none; color:var(--blue); cursor:pointer; }
+  .sent{ display:none; margin-top:14px; font-size:15px; color:var(--mid); max-width:58ch; }
+
   /* mark */
-  .mark{ margin-top:44px; padding-top:26px; border-top:1px solid var(--rule);
+  .mark{ margin-top:46px; padding-top:26px; border-top:1px solid var(--rule);
     display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
   .markbox{ border:1px solid var(--ink); padding:11px 15px; }
   .markbox .t{ font-size:9.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--mid); }
@@ -70,29 +107,28 @@
   .grab button:hover{ color:var(--blue); border-color:var(--blue); }
   .grab button.done{ color:var(--blue); border-color:var(--blue); }
 
-  /* benchmarks */
-  .bench{ margin-top:40px; padding-top:24px; border-top:1px solid var(--rule); }
-  .bench .cap{ font-size:12.5px; color:var(--soft); letter-spacing:.02em; }
-  .brow{ display:grid; grid-template-columns:1fr 1fr; column-gap:48px; margin-top:16px; }
+  /* leaderboard */
+  .bench{ margin-top:56px; padding-top:28px; border-top:1px solid var(--rule); }
+  .bench h3{ font-size:19px; font-weight:700; letter-spacing:-.022em; }
+  .bench .cap{ font-size:13px; color:var(--mid); margin-top:8px; max-width:58ch; }
+  .cats{ display:flex; flex-wrap:wrap; gap:18px; margin-top:20px; padding-bottom:10px;
+    border-bottom:1px solid var(--rule); }
+  .cats button{ font:inherit; font-size:13px; font-weight:600; border:0; background:none; padding:0;
+    color:var(--soft); cursor:pointer; }
+  .cats button.on{ color:var(--ink); }
+  .cats button:hover{ color:var(--ink); }
+  .brow{ display:grid; grid-template-columns:1fr 1fr; column-gap:48px; margin-top:6px; }
   @media (max-width:640px){ .brow{ grid-template-columns:1fr; } }
   .b{ display:flex; align-items:baseline; gap:10px; font-size:14px;
-      padding:7px 0; border-bottom:1px solid var(--rule); }
-  .b .n{ width:20px; flex:none; color:var(--soft); font-size:12px; font-variant-numeric:tabular-nums; }
+      padding:8px 0; border-bottom:1px solid var(--rule); }
+  .b .n{ width:24px; flex:none; color:var(--soft); font-size:12px; font-variant-numeric:tabular-nums; }
   .b .h{ color:var(--mid); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .b .s{ font-weight:700; font-variant-numeric:tabular-nums; }
   .b .tag{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--blue); }
   .b.you .h, .b.us .h{ color:var(--ink); font-weight:700; }
-  .benchnote{ font-size:12.5px; color:var(--soft); margin-top:16px; max-width:62ch; line-height:1.6; }
-
-  /* rest */
-  .rest{ margin-top:52px; }
-  .rest h3{ font-size:18px; font-weight:700; letter-spacing:-.02em; }
-  .rest p{ color:var(--mid); font-size:15px; margin:10px 0 22px; max-width:56ch; }
-  form.mail{ display:flex; gap:0; border-bottom:1.5px solid var(--ink); max-width:440px; }
-  form.mail input{ flex:1; font:inherit; font-size:16px; padding:10px 2px; border:0; background:none; outline:none; }
-  form.mail button{ font:inherit; font-size:14px; font-weight:700; padding:10px 0 10px 18px; border:0;
-    background:none; color:var(--blue); cursor:pointer; }
-  .sent{ display:none; margin-top:14px; font-size:15px; color:var(--mid); }
+  .more{ font:inherit; font-size:13px; font-weight:600; border:0; background:none; padding:12px 0 0;
+    color:var(--blue); cursor:pointer; }
+  .benchnote{ font-size:12.5px; color:var(--soft); margin-top:18px; max-width:62ch; line-height:1.6; }
 </style>
 </head>
 <body>
@@ -102,7 +138,7 @@
   <p class="sub">Ten seconds, no signup. We look at your site the way ChatGPT, Claude and Perplexity do.</p>
   <form class="ask" onsubmit="return run(event)">
     <input id="d" placeholder="yourbusiness.com" autocomplete="off" spellcheck="false" required>
-    <button id="btn" type="submit">Check →</button>
+    <button id="btn" type="submit">Check &rarr;</button>
   </form>
   <p class="hint">We don't need your email for this part.</p>
 
@@ -110,11 +146,34 @@
 
   <div id="out">
     <div class="dom m" id="dom"></div>
+    <div class="score">
+      <b id="big"></b>
+      <span class="of">out of 100</span>
+      <span class="lab" id="lab"></span>
+    </div>
+    <div class="rank" id="rank"></div>
     <div class="verdict" id="verdict"></div>
-    <div class="num"><b id="big"></b><span id="grade"></span></div>
     <p class="diag" id="diag"></p>
 
-    <div class="checks" id="checks"></div>
+    <div class="lens">
+      <button id="lens-goal" class="on" onclick="lens('goal')">By goal</button>
+      <button id="lens-layer" onclick="lens('layer')">By layer</button>
+      <button id="lens-status" onclick="lens('status')">By status</button>
+    </div>
+
+    <div class="view on" id="view-goal"><div id="checks"></div></div>
+    <div class="view" id="view-layer"><div id="layers"></div></div>
+    <div class="view" id="view-status"><div id="statuses"></div></div>
+
+    <div class="rest">
+      <h3>Two checks are still locked</h3>
+      <p>Everything above is what AI sees when it visits your site. It says nothing about whether AI actually recommends you, because that depends on things off your site. Give us an email and we'll run those two live, right here, and send the written report.</p>
+      <form class="mail" onsubmit="return sendFull(event)">
+        <input id="em" type="email" placeholder="you@yourbusiness.com" required>
+        <button type="submit">Unlock them &rarr;</button>
+      </form>
+      <div class="sent" id="sent"></div>
+    </div>
 
     <div class="mark">
       <div class="markbox">
@@ -129,25 +188,21 @@
     </div>
 
     <div class="bench" id="bench" style="display:none">
+      <h3>Where that puts you</h3>
       <div class="cap" id="benchcap"></div>
+      <div class="cats" id="cats"></div>
       <div class="brow" id="benchrow"></div>
+      <button class="more" id="more" onclick="toggleMore()" style="display:none"></button>
       <div class="benchnote" id="benchnote"></div>
-    </div>
-
-    <div class="rest">
-      <h3>This is only half the picture</h3>
-      <p>Site readiness is what AI can see when it visits you. It says nothing about whether AI actually recommends you, because that depends on things off your site. Give us an email and we'll run those two checks live, right here, and send the written report.</p>
-      <form class="mail" onsubmit="return sendFull(event)">
-        <input id="em" type="email" placeholder="you@yourbusiness.com" required>
-        <button type="submit">Send it →</button>
-      </form>
-      <div class="sent" id="sent">On its way. Give it a few minutes.</div>
     </div>
   </div>
 </div>
 
 <script>
-let LAST = null;
+let LAST = null, BENCH = null, ALL = [], CAT = 'All', EXPANDED = false;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const col = v => v>=85?'var(--good)':v>=60?'var(--warn)':'var(--fail)';
+const ord = n => n + (n%100>=11&&n%100<=13 ? 'th' : ['th','st','nd','rd'][n%10] || 'th');
 
 async function run(e){
   e.preventDefault();
@@ -156,27 +211,42 @@ async function run(e){
   if(!d) return false;
   btn.disabled = true; btn.textContent = 'Checking…'; err.style.display='none'; out.style.display='none';
   try{
-    const r = await fetch('/api/scan?d=' + encodeURIComponent(d));
-    const j = await r.json();
+    // Scan and leaderboard in parallel, so the rank line is ready with the score.
+    const [sr, br] = await Promise.all([
+      fetch('/api/scan?d=' + encodeURIComponent(d)),
+      fetch('/api/benchmarks').catch(()=>null)
+    ]);
+    const j = await sr.json();
     if(j && j.inconclusive){ err.textContent = j.error; err.style.display='block'; return false; }
-    if(!r.ok){ err.textContent = j.error || 'Something went wrong.'; err.style.display='block'; return false; }
-    LAST = j; render(j); out.style.display='block'; loadBench(j);
+    if(!sr.ok){ err.textContent = j.error || 'Something went wrong.'; err.style.display='block'; return false; }
+    BENCH = br ? await br.json().catch(()=>null) : null;
+    LAST = j;
+    render(j);
+    out.style.display='block';
+    renderBench(j);
   }catch(_){ err.textContent = 'Could not reach that site.'; err.style.display='block'; }
   finally{ btn.disabled=false; btn.textContent='Check →'; }
   return false;
 }
 
+function label(t){
+  return t>=85 ? 'Ready' : t>=70 ? 'Mostly there' : t>=55 ? 'Needs work' : t>=40 ? 'Poor' : 'Shut out';
+}
+
 function render(j){
   const blocked = j.starBlocked || j.named.length || j.botBlocked;
   document.getElementById('dom').textContent = j.host + ' · checked just now';
+  document.getElementById('big').textContent = j.total;
+  document.getElementById('big').style.color = col(j.total);
+  document.getElementById('lab').textContent = label(j.total);
+  document.getElementById('lab').style.color = col(j.total);
+  document.getElementById('bsc').textContent = j.total;
+  document.getElementById('bgr').textContent = j.grade;
+
   document.getElementById('verdict').textContent = blocked
     ? 'AI is being turned away at the door.'
     : (j.uniq.length ? 'AI can read you. It still might not name you.'
                      : 'AI can read you, but has to guess who you are.');
-  document.getElementById('big').textContent = j.total;
-  document.getElementById('grade').textContent = 'site readiness · what AI can see when it visits';
-  document.getElementById('bsc').textContent = j.total;
-  document.getElementById('bgr').textContent = j.grade;
 
   document.getElementById('diag').textContent = blocked
     ? 'Something on your site refuses the crawlers that feed AI answers. Almost nobody chooses this on purpose. It is usually a host or security setting nobody mentioned.'
@@ -185,6 +255,8 @@ function render(j){
         : 'The crawlers get in, but nothing on the page tells them what your business is, so they infer it from your words.');
 
   const f = (ok,t) => '<i class="'+(ok?'':'no')+'">'+t+'</i>';
+
+  // ---- by goal ----
   const checks = [
     { q:'Can AI reach your site at all?',
       v: blocked ? 'blocked' : 'open',
@@ -220,35 +292,95 @@ function render(j){
       '<div class="facts">'+c.facts+'</div><div class="why">'+c.why+'</div></div>').join('')
     + off.map(o => '<div class="ck off" id="ck-'+o[0]+'"><div class="ckhead"><span class="ckq">'+o[1]+
       '</span><span class="ckv">'+o[2]+'</span></div><div class="why">'+o[3]+'</div></div>').join('');
+
+  // ---- by layer ----
+  const layers = [
+    { q:'Getting in', got:j.access, max:40,
+      why:'Whether the crawlers behind ChatGPT, Claude and Perplexity are served a real page, and whether a sitemap points them at the rest of it.' },
+    { q:'Knowing who you are', got:j.identity, max:30,
+      why:'Structured data naming the business, a person behind it, an address, and an llms.txt that says what you do.' },
+    { q:'Having something to read', got:j.content, max:30,
+      why:'How much real text reaches the crawler, and whether the crawler sees the same page a visitor does.' }
+  ];
+  document.getElementById('layers').innerHTML = layers.map(l => {
+    const pct = Math.round(l.got / l.max * 100);
+    return '<div class="lay"><div class="layhead"><span class="layq">'+l.q+'</span>'+
+      '<span class="layn" style="color:'+col(pct)+'">'+l.got+' / '+l.max+'</span></div>'+
+      '<div class="bar"><span style="width:'+pct+'%;background:'+col(pct)+'"></span></div>'+
+      '<div class="laywhy">'+l.why+'</div></div>';
+  }).join('');
+
+  // ---- by status ----
+  const pass = checks.filter(c=>!c.bad), fail = checks.filter(c=>c.bad);
+  const grp = (title, items) => items.length ? '<div class="grp"><h4>'+title+'</h4><ul>'+
+    items.map(i=>'<li><b>'+i.q+'</b><span>'+i.v+'</span></li>').join('')+'</ul></div>' : '';
+  document.getElementById('statuses').innerHTML =
+    grp('Passing', pass) + grp('Needs attention', fail) +
+    grp('Locked until you unlock them', off.map(o=>({q:o[1],v:'locked'})));
+
+  lens('goal');
 }
 
-async function loadBench(j){
-  try{
-    const r = await fetch('/api/benchmarks'); const b = await r.json();
-    if(!b.rows || !b.rows.length) return;
-    const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-    const host = String(j.host||'').replace(/^www\./,'');
-    // If the visitor scanned a site already on the list, their own live result wins.
-    const rows = b.rows.filter(x => x.host !== host);
-    const mine = { host: host, total: j.total, grade: j.grade, you: true };
-    const all = rows.concat([mine]).sort((a,c)=>c.total-a.total || a.host.localeCompare(c.host));
-    const col = v => v>=85?'var(--green,#2f9e5e)':v>=60?'#e0952f':'var(--fail)';
-    document.getElementById('benchcap').textContent =
-      'Site readiness, scored the same way on ' + all.length + ' sites' + (b.checked ? ' · updated ' + b.checked : '');
-    document.getElementById('benchrow').innerHTML = all.map((x,i) =>
-      '<span class="b'+(x.you?' you':(x.us?' us':''))+'">'+
-      '<span class="n">'+(i+1)+'</span>'+
-      '<span class="h">'+esc(x.host)+'</span>'+
-      (x.you?'<span class="tag">you</span>':(x.us?'<span class="tag">us</span>':''))+
-      '<span class="s" style="color:'+col(x.total)+'">'+x.total+'</span></span>').join('');
-    const note = [];
-    if(b.median!=null) note.push('Median score across the list is '+b.median+'.');
-    note.push('This number covers what AI can see when it visits a site: whether it gets in, whether it can tell who you are, and whether there is anything to read. It does not cover the two off-site checks below, which are the harder ones.');
-    note.push('We run our own site through it on the same schedule and score 100, because we built the site against these checks. They are the same checks we run on yours, and you can verify every one of them yourself.');
-    if(b.skipped) note.push(b.skipped+' more well-known sites refused our request no matter who we said we were, including a plain browser. We left them off rather than score them a zero we could not stand behind.');
-    document.getElementById('benchnote').textContent = note.join(' ');
-    document.getElementById('bench').style.display='block';
-  }catch(_){}
+function lens(which){
+  ['goal','layer','status'].forEach(k=>{
+    document.getElementById('view-'+k).classList.toggle('on', k===which);
+    document.getElementById('lens-'+k).classList.toggle('on', k===which);
+  });
+}
+
+function renderBench(j){
+  const b = BENCH;
+  if(!b || !b.rows || !b.rows.length) return;
+  const host = String(j.host||'').replace(/^www\./,'');
+  // If the visitor scanned a site already on the list, their own live result wins.
+  const rows = b.rows.filter(x => x.host !== host);
+  const mine = { host: host, cat: 'You', total: j.total, grade: j.grade, you: true };
+  ALL = rows.concat([mine])
+            .sort((a,c)=>c.total-a.total || a.host.localeCompare(c.host))
+            .map((x,i)=>Object.assign({}, x, { rank: i+1 }));
+
+  const me = ALL.find(x=>x.you);
+  document.getElementById('rank').innerHTML =
+    'Ranks <b>' + ord(me.rank) + '</b> of ' + ALL.length + ' sites we track' +
+    (b.median!=null ? ' · median is ' + b.median : '');
+
+  document.getElementById('benchcap').textContent =
+    'Well-known sites put through the same three on-site checks, refreshed daily' +
+    (b.checked ? ' · updated ' + b.checked : '') + '.';
+
+  const cats = ['All'].concat([...new Set(ALL.map(x=>x.cat).filter(c=>c && c!=='You'))].sort());
+  document.getElementById('cats').innerHTML = cats.map(c =>
+    '<button class="'+(c===CAT?'on':'')+'" onclick="setCat('+JSON.stringify(c).replace(/"/g,'&quot;')+')">'+esc(c)+'</button>').join('');
+
+  const note = [];
+  note.push('This score covers what AI can see when it visits a site: whether it gets in, whether it can tell who you are, and whether there is anything to read. It does not include the two off-site checks, which are the harder ones.');
+  note.push('We run our own site through it on the same schedule and score 100, because we built the site against these checks. They are the same checks we run on yours, and you can verify every one of them yourself.');
+  if(b.skipped) note.push(b.skipped+' more well-known sites refused our request no matter who we said we were, including a plain browser. We left them off rather than score them a zero we could not stand behind.');
+  document.getElementById('benchnote').textContent = note.join(' ');
+
+  paint();
+  document.getElementById('bench').style.display='block';
+}
+
+function setCat(c){ CAT=c; EXPANDED=false;
+  document.querySelectorAll('#cats button').forEach(b=>b.classList.toggle('on', b.textContent===c));
+  paint();
+}
+function toggleMore(){ EXPANDED=!EXPANDED; paint(); }
+
+function paint(){
+  const list = CAT==='All' ? ALL : ALL.filter(x=>x.cat===CAT || x.you);
+  const shown = EXPANDED ? list : list.slice(0,12);
+  document.getElementById('benchrow').innerHTML = shown.map(x =>
+    '<span class="b'+(x.you?' you':(x.us?' us':''))+'">'+
+    '<span class="n">'+x.rank+'</span>'+
+    '<span class="h">'+esc(x.host)+'</span>'+
+    (x.you?'<span class="tag">you</span>':(x.us?'<span class="tag">us</span>':''))+
+    '<span class="s" style="color:'+col(x.total)+'">'+x.total+'</span></span>').join('');
+  const more = document.getElementById('more');
+  if(list.length>12){ more.style.display='block';
+    more.textContent = EXPANDED ? 'Show fewer' : 'Show all '+list.length; }
+  else more.style.display='none';
 }
 
 function cp(btn, kind){
@@ -271,6 +403,7 @@ async function sendFull(e){
   const sent=document.getElementById('sent');
   sent.style.display='block';
   sent.textContent='Asking ChatGPT, Claude and Perplexity about you. This takes a moment.';
+  lens('goal');
   setRow('backing','checking…','Querying the engines and reading what they cite.');
   setRow('rec','checking…','Running a buyer-intent search for your category.');
   try{
@@ -279,7 +412,7 @@ async function sendFull(e){
     const j = await r.json();
     if(!j.live){ sent.textContent='The full report is on its way to your inbox.'; return false; }
     unlock(j);
-    sent.textContent='Unlocked below. The full written report is also on its way to your inbox.';
+    sent.textContent='Unlocked above. The full written report is also on its way to your inbox.';
   }catch(_){ sent.textContent='The full report is on its way to your inbox.'; }
   return false;
 }
@@ -309,7 +442,7 @@ function unlock(j){
       : 'When asked directly, AI could not confidently say who you are. Nothing outside your own site anchors the name.';
     if(b.answer){
       el.insertAdjacentHTML('beforeend','<div class="why" style="border-left:2px solid var(--rule);padding-left:12px;margin-top:12px">'+
-        '“'+b.answer.replace(/</g,'&lt;').slice(0,260)+'…”</div>');
+        '“'+esc(b.answer).slice(0,260)+'…”</div>');
     }
   }
 
@@ -320,15 +453,19 @@ function unlock(j){
     el.querySelector('.ckv').textContent = named ? (r.named+' of '+r.sources) : 'not named';
     el.querySelector('.ckv').classList.toggle('bad', !named);
     el.querySelector('.why').insertAdjacentHTML('beforebegin',
-      '<div class="facts">'+f(true,'“'+r.query+'”')+f(named, named ? 'you appear in '+r.named+' cited sources' : 'you appear in none of the cited sources')+'</div>');
+      '<div class="facts">'+f(true,'“'+esc(r.query)+'”')+f(named, named ? 'you appear in '+r.named+' cited sources' : 'you appear in none of the cited sources')+'</div>');
     el.querySelector('.why').textContent = named
       ? 'You show up in what the engines cite for that question. That is the thing worth protecting.'
       : 'We asked what your buyers would ask. The engines cited '+r.sources+' sources and you were not in any of them.';
     if(r.cited && r.cited.length){
       el.insertAdjacentHTML('beforeend','<div class="facts" style="margin-top:12px">'+
-        r.cited.map(c=>f(c.you, c.host)).join('')+'</div>');
+        r.cited.map(c=>f(c.you, esc(c.host))).join('')+'</div>');
     }
   }
+
+  // Locked rows are now answered, so the status lens should stop calling them locked.
+  const st=document.getElementById('statuses');
+  if(st){ const last=st.querySelector('.grp:last-child h4'); if(last) last.textContent='Off-site, now checked'; }
 }
 </script>
 </body>
