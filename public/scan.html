@@ -70,6 +70,16 @@
   .grab button:hover{ color:var(--blue); border-color:var(--blue); }
   .grab button.done{ color:var(--blue); border-color:var(--blue); }
 
+  /* benchmarks */
+  .bench{ margin-top:40px; padding-top:24px; border-top:1px solid var(--rule); }
+  .bench .cap{ font-size:12.5px; color:var(--soft); letter-spacing:.02em; }
+  .brow{ display:flex; flex-wrap:wrap; gap:10px 26px; margin-top:14px; }
+  .b{ display:flex; align-items:baseline; gap:7px; font-size:14px; }
+  .b .h{ color:var(--mid); }
+  .b .s{ font-weight:700; font-variant-numeric:tabular-nums; }
+  .b.you .h{ color:var(--ink); font-weight:700; }
+  .b.you::after{ content:"you"; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--blue); margin-left:2px; }
+
   /* rest */
   .rest{ margin-top:52px; }
   .rest h3{ font-size:18px; font-weight:700; letter-spacing:-.02em; }
@@ -114,6 +124,11 @@
       </div>
     </div>
 
+    <div class="bench" id="bench" style="display:none">
+      <div class="cap" id="benchcap"></div>
+      <div class="brow" id="benchrow"></div>
+    </div>
+
     <div class="rest">
       <h3>This is only half the picture</h3>
       <p>Site readiness is what AI can see when it visits you. It says nothing about whether AI actually recommends you, because that depends on things off your site. Give us an email and we'll run those two checks live, right here, and send the written report.</p>
@@ -139,7 +154,7 @@ async function run(e){
     const r = await fetch('/api/scan?d=' + encodeURIComponent(d));
     const j = await r.json();
     if(!r.ok){ err.textContent = j.error || 'Something went wrong.'; err.style.display='block'; return false; }
-    LAST = j; render(j); out.style.display='block';
+    LAST = j; render(j); out.style.display='block'; loadBench(j);
   }catch(_){ err.textContent = 'Could not reach that site.'; err.style.display='block'; }
   finally{ btn.disabled=false; btn.textContent='Check →'; }
   return false;
@@ -199,6 +214,22 @@ function render(j){
       '<div class="facts">'+c.facts+'</div><div class="why">'+c.why+'</div></div>').join('')
     + off.map(o => '<div class="ck off" id="ck-'+o[0]+'"><div class="ckhead"><span class="ckq">'+o[1]+
       '</span><span class="ckv">'+o[2]+'</span></div><div class="why">'+o[3]+'</div></div>').join('');
+}
+
+async function loadBench(j){
+  try{
+    const r = await fetch('/api/benchmarks'); const b = await r.json();
+    if(!b.rows || !b.rows.length) return;
+    const mine = { host: j.host, total: j.total, grade: j.grade, you: true };
+    const all = b.rows.concat([mine]).sort((a,c)=>c.total-a.total);
+    const col = v => v>=85?'var(--green,#2f9e5e)':v>=60?'#e0952f':'var(--fail)';
+    document.getElementById('benchcap').textContent =
+      'Same check, run on sites you know' + (b.checked ? ' · updated ' + b.checked : '');
+    document.getElementById('benchrow').innerHTML = all.map(x =>
+      '<span class="b'+(x.you?' you':'')+'"><span class="h">'+x.host+'</span>'+
+      '<span class="s" style="color:'+col(x.total)+'">'+x.total+'</span></span>').join('');
+    document.getElementById('bench').style.display='block';
+  }catch(_){}
 }
 
 function cp(btn, kind){

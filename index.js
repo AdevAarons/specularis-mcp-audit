@@ -831,6 +831,39 @@ app.get("/badge.svg", async (req, res) => {
   }
 });
 
+
+// ---- Benchmarks: well-known sites, scored with the same scan, cached 24h ----
+const BENCH_LIST = [
+  "stripe.com", "notion.so", "shopify.com", "airbnb.com",
+  "hubspot.com", "squarespace.com", "zillow.com", "compass.com",
+];
+const BENCH = { at: 0, rows: [] };
+
+const refreshBenchmarks = async () => {
+  const rows = [];
+  for (const d of BENCH_LIST) {           // sequential, gentle on the targets
+    try {
+      const site = normalizeUrl(d);
+      if (!site) continue;
+      const r = await scoreSnapshot(site);
+      rows.push({ host: site.host.replace(/^www\./, ""), total: r.total, grade: r.grade,
+                  blocked: (r.named || []).length > 0 || r.starBlocked });
+    } catch (e) {}
+  }
+  if (rows.length) { BENCH.rows = rows.sort((a, b) => b.total - a.total); BENCH.at = Date.now(); }
+};
+
+app.get("/api/benchmarks", async (_req, res) => {
+  try {
+    if (!BENCH.rows.length) await refreshBenchmarks();
+    else if (Date.now() - BENCH.at > 86400000) refreshBenchmarks().catch(() => {}); // stale-while-revalidate
+    const med = BENCH.rows.length
+      ? [...BENCH.rows].map(r => r.total).sort((a, b) => a - b)[Math.floor(BENCH.rows.length / 2)] : null;
+    res.set("Cache-Control", "public, max-age=3600");
+    res.json({ rows: BENCH.rows, median: med, checked: BENCH.at ? new Date(BENCH.at).toISOString().slice(0, 10) : null });
+  } catch (e) { res.status(500).json({ rows: [] }); }
+});
+
 // Add-ons tab switcher — embedded by URL on the pricing section (interactive)
 app.get("/addons-switcher", (_req, res) => {
   if (!ADDONS_SWITCHER_HTML) return res.status(404).send("Not found");
@@ -910,4 +943,5 @@ const methodNotAllowed = (_req, res) => res.status(405).json({ jsonrpc: "2.0", e
 app.get("/mcp", methodNotAllowed);
 app.delete("/mcp", methodNotAllowed);
 
+setTimeout(() => { refreshBenchmarks().catch(() => {}); }, 8000);
 app.listen(PORT, () => console.log(`Specularis MCP server listening on :${PORT} (POST /mcp)`));
