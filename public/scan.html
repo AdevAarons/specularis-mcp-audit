@@ -234,7 +234,7 @@ async function loadBench(j){
     const all = rows.concat([mine]).sort((a,c)=>c.total-a.total || a.host.localeCompare(c.host));
     const col = v => v>=85?'var(--green,#2f9e5e)':v>=60?'#e0952f':'var(--fail)';
     document.getElementById('benchcap').textContent =
-      'The same five checks, run on ' + all.length + ' sites' + (b.checked ? ' · updated ' + b.checked : '');
+      'Site readiness, scored the same way on ' + all.length + ' sites' + (b.checked ? ' · updated ' + b.checked : '');
     document.getElementById('benchrow').innerHTML = all.map((x,i) =>
       '<span class="b'+(x.you?' you':(x.us?' us':''))+'">'+
       '<span class="n">'+(i+1)+'</span>'+
@@ -243,7 +243,8 @@ async function loadBench(j){
       '<span class="s" style="color:'+col(x.total)+'">'+x.total+'</span></span>').join('');
     const note = [];
     if(b.median!=null) note.push('Median score across the list is '+b.median+'.');
-    note.push('We run our own site through the same five checks on the same schedule, and it sits where it sits.');
+    note.push('This number covers what AI can see when it visits a site: whether it gets in, whether it can tell who you are, and whether there is anything to read. It does not cover the two off-site checks below, which are the harder ones.');
+    note.push('We run our own site through it on the same schedule and score 100, because we built the site against these checks. They are the same checks we run on yours, and you can verify every one of them yourself.');
     if(b.skipped) note.push(b.skipped+' more well-known sites refused our request no matter who we said we were, including a plain browser. We left them off rather than score them a zero we could not stand behind.');
     document.getElementById('benchnote').textContent = note.join(' ');
     document.getElementById('bench').style.display='block';
