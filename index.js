@@ -238,10 +238,17 @@ const scoreSnapshot = async (site) => {
   else if (botBest >= 250) content = 15; else if (botBest >= 60) content = 7;
   if (renderGap) content = Math.min(content, 10);
 
-  const total = Math.max(0, Math.min(100, Math.round(access + identity + content)));
-  const grade = total >= 85 ? "A" : total >= 70 ? "B" : total >= 55 ? "C" : total >= 40 ? "D" : "F";
+  // If a normal browser is ALSO refused, we are the ones being blocked (datacenter IP, geo, WAF).
+  // That is not an AI-visibility finding and must not be scored as one.
+  const allBotsRefused = botNames.every(n => !bots[n].served);
+  const inconclusive = !browserOk && allBotsRefused && !starBlocked;
 
-  return { host: site.host, total, grade, access, identity, content,
+  const total = inconclusive ? null : Math.max(0, Math.min(100, Math.round(access + identity + content)));
+  const grade = inconclusive ? "?" : (total >= 85 ? "A" : total >= 70 ? "B" : total >= 55 ? "C" : total >= 40 ? "D" : "F");
+
+  return { host: site.host, total, grade, inconclusive,
+    inconclusiveReason: inconclusive ? "This site refused our request no matter who we said we were, including a normal browser. That usually means it blocks datacenter traffic, so we cannot tell what it does with AI crawlers from here." : null,
+    access, identity, content,
     starBlocked, named: blockedBots, botBlocked: blockedBots.length > 0 && browserOk,
     bots, browserWords, words: botBest, renderGap,
     uniq, validSchema: valid, hasOrg, hasPerson, hasAddress,
@@ -729,6 +736,7 @@ app.get("/api/scan", async (req, res) => {
       : "That's a few checks in a short window. Give it a minute." });
     const r = await scoreSnapshot(site);
     r.badge = badgeUrl(site.host.replace(/^www\./, ""), r.total, r.grade);
+    if (r.inconclusive) return res.status(200).json({ inconclusive: true, host: r.host, error: r.inconclusiveReason });
     if (!r.reachable && !r.botBlocked) return res.status(502).json({ error: "Could not reach that site. Check the domain and try again." });
     res.json(r);
   } catch (e) { res.status(500).json({ error: "Something went wrong on our side." }); }
@@ -846,6 +854,7 @@ const refreshBenchmarks = async () => {
       const site = normalizeUrl(d);
       if (!site) continue;
       const r = await scoreSnapshot(site);
+      if (r.inconclusive) continue;   // we were blocked, not the AI. Not a finding, do not publish.
       rows.push({ host: site.host.replace(/^www\./, ""), total: r.total, grade: r.grade,
                   blocked: (r.named || []).length > 0 || r.starBlocked });
     } catch (e) {}

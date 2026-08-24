@@ -153,6 +153,7 @@ async function run(e){
   try{
     const r = await fetch('/api/scan?d=' + encodeURIComponent(d));
     const j = await r.json();
+    if(j && j.inconclusive){ err.textContent = j.error; err.style.display='block'; return false; }
     if(!r.ok){ err.textContent = j.error || 'Something went wrong.'; err.style.display='block'; return false; }
     LAST = j; render(j); out.style.display='block'; loadBench(j);
   }catch(_){ err.textContent = 'Could not reach that site.'; err.style.display='block'; }
