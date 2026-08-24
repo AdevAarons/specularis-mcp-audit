@@ -841,35 +841,124 @@ app.get("/badge.svg", async (req, res) => {
 
 
 // ---- Benchmarks: well-known sites, scored with the same scan, cached 24h ----
+// Our own site is scored by the same five checks as everyone else, on the same
+// schedule, with no special casing. It ranks wherever it ranks.
 const BENCH_LIST = [
-  "stripe.com", "notion.so", "shopify.com", "airbnb.com",
-  "hubspot.com", "squarespace.com", "zillow.com", "compass.com",
-];
-const BENCH = { at: 0, rows: [] };
+  { d: "specularisinc.com", cat: "AI visibility", us: true },
 
-const refreshBenchmarks = async () => {
-  const rows = [];
-  for (const d of BENCH_LIST) {           // sequential, gentle on the targets
-    try {
-      const site = normalizeUrl(d);
-      if (!site) continue;
-      const r = await scoreSnapshot(site);
-      if (r.inconclusive) continue;   // we were blocked, not the AI. Not a finding, do not publish.
-      rows.push({ host: site.host.replace(/^www\./, ""), total: r.total, grade: r.grade,
-                  blocked: (r.named || []).length > 0 || r.starBlocked });
-    } catch (e) {}
-  }
-  if (rows.length) { BENCH.rows = rows.sort((a, b) => b.total - a.total); BENCH.at = Date.now(); }
+  // Real estate — the niche the metro studies cover
+  { d: "compass.com", cat: "Real estate" },
+  { d: "redfin.com", cat: "Real estate" },
+  { d: "realtor.com", cat: "Real estate" },
+  { d: "remax.com", cat: "Real estate" },
+  { d: "coldwellbanker.com", cat: "Real estate" },
+  { d: "century21.com", cat: "Real estate" },
+  { d: "sothebysrealty.com", cat: "Real estate" },
+  { d: "douglaselliman.com", cat: "Real estate" },
+  { d: "corcoran.com", cat: "Real estate" },
+  { d: "kw.com", cat: "Real estate" },
+
+  // Software and tools
+  { d: "stripe.com", cat: "Software" },
+  { d: "notion.so", cat: "Software" },
+  { d: "shopify.com", cat: "Software" },
+  { d: "hubspot.com", cat: "Software" },
+  { d: "squarespace.com", cat: "Software" },
+  { d: "salesforce.com", cat: "Software" },
+  { d: "slack.com", cat: "Software" },
+  { d: "dropbox.com", cat: "Software" },
+  { d: "atlassian.com", cat: "Software" },
+  { d: "figma.com", cat: "Software" },
+  { d: "canva.com", cat: "Software" },
+  { d: "mailchimp.com", cat: "Software" },
+  { d: "webflow.com", cat: "Software" },
+  { d: "wix.com", cat: "Software" },
+  { d: "asana.com", cat: "Software" },
+  { d: "intercom.com", cat: "Software" },
+  { d: "twilio.com", cat: "Software" },
+  { d: "github.com", cat: "Software" },
+  { d: "zendesk.com", cat: "Software" },
+  { d: "calendly.com", cat: "Software" },
+
+  // Publishers and reference
+  { d: "wikipedia.org", cat: "Reference" },
+  { d: "nytimes.com", cat: "Publishing" },
+  { d: "forbes.com", cat: "Publishing" },
+  { d: "techcrunch.com", cat: "Publishing" },
+  { d: "theverge.com", cat: "Publishing" },
+
+  // Consumer and commerce
+  { d: "etsy.com", cat: "Commerce" },
+  { d: "wayfair.com", cat: "Commerce" },
+  { d: "chewy.com", cat: "Commerce" },
+  { d: "doordash.com", cat: "Commerce" },
+  { d: "expedia.com", cat: "Travel" },
+  { d: "booking.com", cat: "Travel" },
+  { d: "target.com", cat: "Commerce" },
+  { d: "bestbuy.com", cat: "Commerce" },
+
+  // Finance
+  { d: "paypal.com", cat: "Finance" },
+  { d: "coinbase.com", cat: "Finance" },
+  { d: "robinhood.com", cat: "Finance" },
+  { d: "fidelity.com", cat: "Finance" },
+];
+const BENCH = { at: 0, rows: [], skipped: 0, busy: false };
+
+// Small pool: polite to the targets, but 50 sites sequentially takes too long to warm.
+const mapPool = async (items, n, fn) => {
+  const out = []; let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) { const k = i++; out[k] = await fn(items[k]); }
+  }));
+  return out;
 };
 
-app.get("/api/benchmarks", async (_req, res) => {
+const refreshBenchmarks = async () => {
+  if (BENCH.busy) return;
+  BENCH.busy = true;
   try {
-    if (!BENCH.rows.length) await refreshBenchmarks();
-    else if (Date.now() - BENCH.at > 86400000) refreshBenchmarks().catch(() => {}); // stale-while-revalidate
-    const med = BENCH.rows.length
-      ? [...BENCH.rows].map(r => r.total).sort((a, b) => a - b)[Math.floor(BENCH.rows.length / 2)] : null;
+    const settled = await mapPool(BENCH_LIST, 5, async (entry) => {
+      try {
+        const site = normalizeUrl(entry.d);
+        if (!site) return null;
+        const r = await scoreSnapshot(site);
+        if (r.inconclusive) return null;  // we were blocked, not the AI. Not a finding, do not publish.
+        return {
+          host: site.host.replace(/^www\./, ""),
+          cat: entry.cat,
+          us: !!entry.us,
+          total: r.total,
+          grade: r.grade,
+          blocked: (r.named || []).length > 0 || r.starBlocked,
+        };
+      } catch (e) { return null; }
+    });
+    const rows = settled.filter(Boolean);
+    if (rows.length) {
+      // Honest sort, every row on the same footing. No pinning.
+      BENCH.rows = rows.sort((a, b) => b.total - a.total || a.host.localeCompare(b.host));
+      BENCH.skipped = BENCH_LIST.length - rows.length;
+      BENCH.at = Date.now();
+    }
+  } finally { BENCH.busy = false; }
+};
+
+app.get("/api/benchmarks", (_req, res) => {
+  try {
+    // Never block the page on a cold cache: kick the refresh off and return what we have.
+    if (!BENCH.rows.length || Date.now() - BENCH.at > 86400000) refreshBenchmarks().catch(() => {});
+    const scores = BENCH.rows.map(r => r.total).sort((a, b) => a - b);
+    const med = scores.length ? scores[Math.floor(scores.length / 2)] : null;
     res.set("Cache-Control", "public, max-age=3600");
-    res.json({ rows: BENCH.rows, median: med, checked: BENCH.at ? new Date(BENCH.at).toISOString().slice(0, 10) : null });
+    res.json({
+      rows: BENCH.rows,
+      median: med,
+      scanned: BENCH.rows.length,
+      skipped: BENCH.skipped,
+      building: !BENCH.rows.length,
+      checked: BENCH.at ? new Date(BENCH.at).toISOString().slice(0, 10) : null,
+    });
   } catch (e) { res.status(500).json({ rows: [] }); }
 });
 

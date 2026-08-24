@@ -73,12 +73,16 @@
   /* benchmarks */
   .bench{ margin-top:40px; padding-top:24px; border-top:1px solid var(--rule); }
   .bench .cap{ font-size:12.5px; color:var(--soft); letter-spacing:.02em; }
-  .brow{ display:flex; flex-wrap:wrap; gap:10px 26px; margin-top:14px; }
-  .b{ display:flex; align-items:baseline; gap:7px; font-size:14px; }
-  .b .h{ color:var(--mid); }
+  .brow{ display:grid; grid-template-columns:1fr 1fr; column-gap:48px; margin-top:16px; }
+  @media (max-width:640px){ .brow{ grid-template-columns:1fr; } }
+  .b{ display:flex; align-items:baseline; gap:10px; font-size:14px;
+      padding:7px 0; border-bottom:1px solid var(--rule); }
+  .b .n{ width:20px; flex:none; color:var(--soft); font-size:12px; font-variant-numeric:tabular-nums; }
+  .b .h{ color:var(--mid); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .b .s{ font-weight:700; font-variant-numeric:tabular-nums; }
-  .b.you .h{ color:var(--ink); font-weight:700; }
-  .b.you::after{ content:"you"; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--blue); margin-left:2px; }
+  .b .tag{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--blue); }
+  .b.you .h, .b.us .h{ color:var(--ink); font-weight:700; }
+  .benchnote{ font-size:12.5px; color:var(--soft); margin-top:16px; max-width:62ch; line-height:1.6; }
 
   /* rest */
   .rest{ margin-top:52px; }
@@ -127,6 +131,7 @@
     <div class="bench" id="bench" style="display:none">
       <div class="cap" id="benchcap"></div>
       <div class="brow" id="benchrow"></div>
+      <div class="benchnote" id="benchnote"></div>
     </div>
 
     <div class="rest">
@@ -221,14 +226,26 @@ async function loadBench(j){
   try{
     const r = await fetch('/api/benchmarks'); const b = await r.json();
     if(!b.rows || !b.rows.length) return;
-    const mine = { host: j.host, total: j.total, grade: j.grade, you: true };
-    const all = b.rows.concat([mine]).sort((a,c)=>c.total-a.total);
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const host = String(j.host||'').replace(/^www\./,'');
+    // If the visitor scanned a site already on the list, their own live result wins.
+    const rows = b.rows.filter(x => x.host !== host);
+    const mine = { host: host, total: j.total, grade: j.grade, you: true };
+    const all = rows.concat([mine]).sort((a,c)=>c.total-a.total || a.host.localeCompare(c.host));
     const col = v => v>=85?'var(--green,#2f9e5e)':v>=60?'#e0952f':'var(--fail)';
     document.getElementById('benchcap').textContent =
-      'Same check, run on sites you know' + (b.checked ? ' · updated ' + b.checked : '');
-    document.getElementById('benchrow').innerHTML = all.map(x =>
-      '<span class="b'+(x.you?' you':'')+'"><span class="h">'+x.host+'</span>'+
+      'The same five checks, run on ' + all.length + ' sites' + (b.checked ? ' · updated ' + b.checked : '');
+    document.getElementById('benchrow').innerHTML = all.map((x,i) =>
+      '<span class="b'+(x.you?' you':(x.us?' us':''))+'">'+
+      '<span class="n">'+(i+1)+'</span>'+
+      '<span class="h">'+esc(x.host)+'</span>'+
+      (x.you?'<span class="tag">you</span>':(x.us?'<span class="tag">us</span>':''))+
       '<span class="s" style="color:'+col(x.total)+'">'+x.total+'</span></span>').join('');
+    const note = [];
+    if(b.median!=null) note.push('Median score across the list is '+b.median+'.');
+    note.push('We run our own site through the same five checks on the same schedule, and it sits where it sits.');
+    if(b.skipped) note.push(b.skipped+' more well-known sites refused our request no matter who we said we were, including a plain browser. We left them off rather than score them a zero we could not stand behind.');
+    document.getElementById('benchnote').textContent = note.join(' ');
     document.getElementById('bench').style.display='block';
   }catch(_){}
 }
