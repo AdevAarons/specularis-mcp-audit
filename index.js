@@ -811,14 +811,19 @@ const badgeUrl = (host, score, grade) => {
 };
 
 const badgeSvg = (host, score, grade, dt) => {
-  const col = score >= 85 ? "#2f9e5e" : score >= 60 ? "#e0952f" : "#b3402c";
+  const scored = Number.isFinite(score);
+  const col = !scored ? "#5b6167" : score >= 85 ? "#2f9e5e" : score >= 60 ? "#e0952f" : "#b3402c";
   const w = 268, h = 66;
   const when = dt ? String(dt) : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Site readiness ${score} of 100 for ${host}">
+  const label = scored ? `Site readiness ${score} of 100 for ${host}` : `Site readiness could not be measured for ${host}`;
+  const value = scored
+    ? `${score}<tspan fill="#5b6167" font-size="14"> / 100</tspan> <tspan fill="${col}" font-size="20">${grade}</tspan>`
+    : `<tspan font-size="17">not measurable</tspan>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${label}">
   <rect width="${w}" height="${h}" rx="6" fill="#111214"/>
   <rect x="0" y="0" width="4" height="${h}" rx="2" fill="${col}"/>
   <text x="20" y="24" fill="#8c9298" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" letter-spacing="2.2">SITE READINESS</text>
-  <text x="20" y="50" fill="#ffffff" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" font-weight="700" letter-spacing="-0.8">${score}<tspan fill="#5b6167" font-size="14"> / 100</tspan> <tspan fill="${col}" font-size="20">${grade}</tspan></text>
+  <text x="20" y="50" fill="#ffffff" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" font-weight="700" letter-spacing="-0.8">${value}</text>
   <text x="${w - 20}" y="24" text-anchor="end" fill="#5b6167" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" letter-spacing="1.6">SPECULARIS</text>
   <text x="${w - 20}" y="43" text-anchor="end" fill="#8c9298" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5">${String(host).slice(0, 28)}</text>
   <text x="${w - 20}" y="56" text-anchor="end" fill="#5b6167" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="8.5">as of ${when}</text>
@@ -839,6 +844,11 @@ app.get("/badge.svg", async (req, res) => {
     if (!site) return res.send(badgeSvg("specularis", 0, "?", ""));
     const r = await scoreSnapshot(site);
     res.set("Cache-Control", "public, max-age=3600");
+    // A site that refused us outright has no score. Say so on the badge rather
+    // than rendering "null of 100", which reads as broken and scores nobody.
+    if (r.inconclusive || !Number.isFinite(r.total)) {
+      return res.send(badgeSvg(site.host, null, "?", ""));
+    }
     return res.send(badgeSvg(site.host, r.total, r.grade, new Date().toISOString().slice(0, 7)));
   } catch (e) {
     return res.send(badgeSvg("unavailable", 0, "?", ""));
