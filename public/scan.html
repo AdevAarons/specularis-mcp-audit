@@ -259,13 +259,15 @@ function render(j){
         : 'The crawlers get in, but nothing on the page tells them what your business is, so they infer it from your words.');
 
   const f = (ok,t) => '<i class="'+(ok?'':'no')+'">'+t+'</i>';
+  // One rule for all three, so a near-perfect pillar is not filed next to a half-empty one.
+  const st = (got,max,hardFail) => hardFail ? 'fail' : (got/max >= 0.9 ? 'pass' : got/max >= 0.5 ? 'weak' : 'fail');
 
   // ---- by goal ----
   const checks = [
     { q:'Can AI reach your site at all?',
       v: blocked ? 'blocked' : 'open',
       bad: blocked,
-      state: blocked ? 'fail' : (j.access >= 40 ? 'pass' : 'weak'),
+      state: st(j.access, 40, blocked),
       facts: j.starBlocked ? f(false,'robots.txt blocks every crawler')
            : j.named.length ? j.named.map(n=>f(false,n+' blocked')).join('')
            : j.botBlocked ? f(false,'loads for people, refuses GPTBot')
@@ -275,7 +277,7 @@ function render(j){
     { q:'Does AI know who you are?',
       v: j.hasOrg ? 'identified' : (j.uniq.length ? 'partial' : 'nothing'),
       bad: !j.uniq.length,
-      state: !j.uniq.length ? 'fail' : (j.identity >= 24 ? 'pass' : 'weak'),
+      state: st(j.identity, 30, !j.uniq.length),
       facts: (j.uniq.length ? j.uniq.slice(0,4).map(t=>f(true,t)).join('') : f(false,'no structured data'))
              + f(j.llmsPresent,'llms.txt'),
       why: j.hasOrg ? 'There is machine-readable data saying what this business is.'
@@ -283,7 +285,7 @@ function render(j){
     { q:'Is there anything worth quoting?',
       v: j.words >= 600 ? 'plenty' : (j.words >= 250 ? 'thin' : 'almost nothing'),
       bad: j.words < 250,
-      state: j.words < 250 ? 'fail' : (j.content >= 30 && !j.renderGap ? 'pass' : 'weak'),
+      state: st(j.content, 30, j.words < 250 || j.renderGap),
       facts: f(j.words>=600, j.words.toLocaleString()+' words reach the crawler'),
       why: j.words < 250 ? 'That is far less than a visitor sees. Usually the page renders in the browser but not for the bot.'
                          : 'There is enough real text here for AI to lift an answer from.' }
