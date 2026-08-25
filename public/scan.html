@@ -10,6 +10,17 @@
 <style>
   :root{ --blue:#2467E3; --ink:#111214; --mid:#5b6167; --soft:#8c9298; --rule:#dfe1e5;
          --bg:#fdfdfc; --fail:#b3402c; --warn:#b07d1f; --good:#2f7d52; }
+  /* /scan?theme=dark — the free-audit section on specularisinc.com is #0a0a0f.
+     Accent and semantics are lifted so they clear 4.5:1 on that ground; the
+     brand blue itself is too dark to read as text on near-black. */
+  :root.dark{ --blue:#79a0ff; --ink:#f4f5f7; --mid:#a6adb6; --soft:#7c838c; --rule:#24262d;
+              --bg:#0a0a0f; --fail:#e8705c; --warn:#e0a94a; --good:#57c98a; }
+  :root.dark form.ask, :root.dark form.mail{ border-bottom-color:var(--ink); }
+  :root.dark .markbox{ border-color:var(--rule); }
+  :root.dark .rest{ border-top-color:var(--ink); }
+  :root.dark input::placeholder{ color:#5d646d; }
+  :root.dark select{ color:var(--mid); }
+  :root.dark select option{ background:#14151b; color:var(--ink); }
   *{ box-sizing:border-box; margin:0; padding:0; }
   body{ background:var(--bg); color:var(--ink); line-height:1.5;
     font-family:Satoshi,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
@@ -91,7 +102,10 @@
   .rest{ margin-top:46px; padding-top:28px; border-top:1.5px solid var(--ink); }
   .rest h3{ font-size:19px; font-weight:700; letter-spacing:-.022em; }
   .rest p{ color:var(--mid); font-size:15px; margin:10px 0 22px; max-width:58ch; }
-  form.mail{ display:flex; gap:0; border-bottom:1.5px solid var(--ink); max-width:440px; }
+  form.mail{ display:flex; flex-wrap:wrap; align-items:baseline; gap:0 14px;
+    border-bottom:1.5px solid var(--ink); max-width:560px; }
+  form.mail select{ font:inherit; font-size:15px; padding:10px 2px; border:0; background:none;
+    outline:none; color:var(--mid); cursor:pointer; }
   form.mail input{ flex:1; font:inherit; font-size:16px; padding:10px 2px; border:0; background:none; outline:none; }
   form.mail button{ font:inherit; font-size:14px; font-weight:700; padding:10px 0 10px 18px; border:0;
     background:none; color:var(--blue); cursor:pointer; }
@@ -140,6 +154,14 @@
   body.embed h1, body.embed .sub{ display:none; }
   body.embed form.ask{ margin-top:0; }
 </style>
+<script>
+  // Read the theme before first paint: a flash of white inside a black page is worse
+  // than a slow one. Kept tiny and inline for that reason.
+  try {
+    var q = new URLSearchParams(location.search);
+    if (q.get('theme') === 'dark') document.documentElement.classList.add('dark');
+  } catch (e) {}
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -181,8 +203,16 @@
       <p>The number above grades three pillars: whether AI gets in, whether it can tell who you are, and whether there is anything worth quoting. The full audit grades five, adding off-site corroboration and technical foundation. Those two are the harder ones, so expect the full score to come in below the number above. That gap is the part you cannot see yet, and it is usually where the real problem is.</p>
       <p>Give us an email and we'll run the off-site checks live, right here, and send the complete five-pillar report.</p>
       <form class="mail" onsubmit="return sendFull(event)">
-        <input id="nm" type="text" placeholder="First name" autocomplete="given-name" style="max-width:130px">
+        <input id="nm" type="text" placeholder="First name" autocomplete="given-name" style="max-width:120px">
         <input id="em" type="email" placeholder="you@yourbusiness.com" required>
+        <select id="rl" aria-label="What's your role?">
+          <option value="">Your role</option>
+          <option>Real Estate Agent</option>
+          <option>Attorney</option>
+          <option>Founder</option>
+          <option>Crypto Founder</option>
+          <option>Other</option>
+        </select>
         <button type="submit">Unlock them &rarr;</button>
       </form>
       <div class="sent" id="sent"></div>
@@ -446,6 +476,7 @@ async function sendFull(e){
   e.preventDefault();
   const em=document.getElementById('em').value.trim();
   const nm=document.getElementById('nm').value.trim();
+  const rl=document.getElementById('rl').value;
   if(!em||!LAST) return false;
   const sent=document.getElementById('sent');
   sent.style.display='block';
@@ -455,7 +486,7 @@ async function sendFull(e){
   setRow('rec','checking…','Running a buyer-intent search for your category.');
   try{
     const r = await fetch('/api/full-report',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email:em,name:nm,domain:LAST.host})});
+      body:JSON.stringify({email:em,name:nm,role:rl,domain:LAST.host})});
     const j = await r.json();
     if(!j.live){ sent.textContent='The full report is on its way to your inbox.'; return false; }
     unlock(j);
