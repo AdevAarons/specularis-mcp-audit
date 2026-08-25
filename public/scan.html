@@ -131,6 +131,14 @@
   .more{ font:inherit; font-size:13px; font-weight:600; border:0; background:none; padding:12px 0 0;
     color:var(--blue); cursor:pointer; }
   .benchnote{ font-size:12.5px; color:var(--soft); margin-top:18px; max-width:62ch; line-height:1.6; }
+
+  /* Embedded on specularisinc.com/free-audit. The page around us supplies the
+     headline and the explanatory copy as real text, so we drop ours: crawlers
+     cannot read inside this frame, and that copy needs to live in the page HTML. */
+  body.embed{ background:transparent; }
+  body.embed .wrap{ padding:0 0 8px; max-width:none; }
+  body.embed h1, body.embed .sub{ display:none; }
+  body.embed form.ask{ margin-top:0; }
 </style>
 </head>
 <body>
@@ -204,6 +212,29 @@
 
 <script>
 let LAST = null, BENCH = null, ALL = [], CAT = 'All', EXPANDED = false;
+
+// ---- embed mode: /scan?embed=1 inside an iframe on specularisinc.com ----
+const EMBED = new URLSearchParams(location.search).get('embed') === '1';
+if (EMBED) document.documentElement.classList.add('pre-embed');
+addEventListener('DOMContentLoaded', () => { if (EMBED) document.body.classList.add('embed'); });
+
+// The page grows a lot once results render, so tell the parent how tall we are
+// instead of making it guess. Parent listens for {specularisScanHeight}.
+let lastH = 0;
+function postHeight(){
+  if (!EMBED || !parent || parent === window) return;
+  const h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+  if (h && Math.abs(h - lastH) > 2) {
+    lastH = h;
+    parent.postMessage({ specularisScanHeight: h }, '*');
+  }
+}
+addEventListener('load', postHeight);
+addEventListener('resize', postHeight);
+if (EMBED && 'ResizeObserver' in window) {
+  addEventListener('DOMContentLoaded', () => new ResizeObserver(postHeight).observe(document.body));
+}
+
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const col = v => v>=85?'var(--good)':v>=60?'var(--warn)':'var(--fail)';
 const ord = n => n + (n%100>=11&&n%100<=13 ? 'th' : ['th','st','nd','rd'][n%10] || 'th');
@@ -221,12 +252,13 @@ async function run(e){
       fetch('/api/benchmarks').catch(()=>null)
     ]);
     const j = await sr.json();
-    if(j && j.inconclusive){ err.textContent = j.error; err.style.display='block'; return false; }
+    if(j && j.inconclusive){ err.textContent = j.error; err.style.display='block'; postHeight(); return false; }
     if(!sr.ok){ err.textContent = j.error || 'Something went wrong.'; err.style.display='block'; return false; }
     BENCH = br ? await br.json().catch(()=>null) : null;
     LAST = j;
     render(j);
     out.style.display='block';
+    postHeight();
     renderBench(j);
   }catch(_){ err.textContent = 'Could not reach that site.'; err.style.display='block'; }
   finally{ btn.disabled=false; btn.textContent='Check →'; }
@@ -336,6 +368,7 @@ function lens(which){
     document.getElementById('view-'+k).classList.toggle('on', k===which);
     document.getElementById('lens-'+k).classList.toggle('on', k===which);
   });
+  postHeight();
 }
 
 function renderBench(j){
@@ -370,6 +403,7 @@ function renderBench(j){
 
   paint();
   document.getElementById('bench').style.display='block';
+  postHeight();
 }
 
 function setCat(c){ CAT=c; EXPANDED=false;
@@ -387,6 +421,7 @@ function paint(){
     '<span class="h">'+esc(x.host)+'</span>'+
     (x.you?'<span class="tag">you</span>':(x.us?'<span class="tag">us</span>':''))+
     '<span class="s" style="color:'+col(x.total)+'">'+x.total+'</span></span>').join('');
+  postHeight();
   const more = document.getElementById('more');
   if(list.length>12){ more.style.display='block';
     more.textContent = EXPANDED ? 'Show fewer' : 'Show all '+list.length; }
@@ -476,6 +511,7 @@ function unlock(j){
   // Locked rows are now answered, so the status lens should stop calling them locked.
   const st=document.getElementById('statuses');
   if(st){ const last=st.querySelector('.grp:last-child h4'); if(last) last.textContent='Off-site, now checked'; }
+  postHeight();
 }
 </script>
 </body>
