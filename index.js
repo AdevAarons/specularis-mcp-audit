@@ -750,14 +750,20 @@ app.get("/scan", (_req, res) => {
 // Hand off to the existing n8n audit for the full scored report
 app.post("/api/full-report", async (req, res) => {
   try {
-    const { email, domain } = req.body || {};
+    const { email, domain, name, role } = req.body || {};
     if (!email || !domain) return res.status(400).json({ error: "email and domain required" });
     const site = normalizeUrl(domain);
     if (!site) return res.status(400).json({ error: "bad domain" });
     const bare = site.host.replace(/^www\./, "");
 
+    // The report is addressed to this name. Prefer what they typed; only fall back
+    // to the email local part, tidied, so we never head a PDF with "adev.aarons".
+    const tidy = String(email).split("@")[0].replace(/[._-]+/g, " ").trim()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+    const leadName = (name && String(name).trim()) || tidy || "there";
+
     // 1) kick off the full n8n audit so the PDF still lands in their inbox
-    triggerFullAudit({ name: String(email).split("@")[0], email, website_url: site.url, role: "Other" })
+    triggerFullAudit({ name: leadName, email, website_url: site.url, role: role || "Other" })
       .catch(() => {});
 
     if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) {

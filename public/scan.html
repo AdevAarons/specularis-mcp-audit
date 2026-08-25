@@ -181,6 +181,7 @@
       <p>The number above grades three pillars: whether AI gets in, whether it can tell who you are, and whether there is anything worth quoting. The full audit grades five, adding off-site corroboration and technical foundation. Those two are the harder ones, so expect the full score to come in below the number above. That gap is the part you cannot see yet, and it is usually where the real problem is.</p>
       <p>Give us an email and we'll run the off-site checks live, right here, and send the complete five-pillar report.</p>
       <form class="mail" onsubmit="return sendFull(event)">
+        <input id="nm" type="text" placeholder="First name" autocomplete="given-name" style="max-width:130px">
         <input id="em" type="email" placeholder="you@yourbusiness.com" required>
         <button type="submit">Unlock them &rarr;</button>
       </form>
@@ -444,6 +445,7 @@ function cp(btn, kind){
 async function sendFull(e){
   e.preventDefault();
   const em=document.getElementById('em').value.trim();
+  const nm=document.getElementById('nm').value.trim();
   if(!em||!LAST) return false;
   const sent=document.getElementById('sent');
   sent.style.display='block';
@@ -453,7 +455,7 @@ async function sendFull(e){
   setRow('rec','checking…','Running a buyer-intent search for your category.');
   try{
     const r = await fetch('/api/full-report',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email:em,domain:LAST.host})});
+      body:JSON.stringify({email:em,name:nm,domain:LAST.host})});
     const j = await r.json();
     if(!j.live){ sent.textContent='The full report is on its way to your inbox.'; return false; }
     unlock(j);
