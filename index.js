@@ -998,7 +998,8 @@ app.get("/api/scan", async (req, res) => {
     if (!rl.ok) return res.status(429).json({ error: rl.reason === "daily"
       ? "This free tool has hit today's limit. Try again tomorrow, or run the full audit."
       : "That's a few checks in a short window. Give it a minute." });
-    const cite = await getCitationSignal(site);
+    const fresh = String(req.query.fresh || "") === "1";
+    const cite = await getCitationSignal(site, fresh);
     const r = await scoreSnapshot(site, cite);
     r.badge = badgeUrl(site.host.replace(/^www\./, ""), r.total, r.grade);
     // Pillars 4 and 5 are scored in the open but explained only after an email.

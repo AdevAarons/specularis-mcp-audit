@@ -396,7 +396,8 @@ function render(j){
            : j.botBlocked ? f(false,'loads for people, refuses GPTBot')
            : f(true,'GPTBot')+f(true,'ClaudeBot')+f(true,'PerplexityBot'),
       why: blocked ? 'Until this is fixed, nothing else matters much. The crawler never gets to read the rest.'
-                   : 'All three major crawlers get a real page back.' },
+                   : 'All three major crawlers get a real page back'
+                     + (j.pagesTested>1 ? ', across '+j.pagesTested+' pages we tested, not just the homepage.' : '.') },
     { q:'Does AI know who you are?',
       v: j.hasOrg ? 'identified' : (j.uniq.length ? 'partial' : 'nothing'),
       bad: !j.uniq.length,
@@ -414,12 +415,22 @@ function render(j){
                          : 'There is enough real text here for AI to lift an answer from.' }
   ];
   const P2 = j.pillars || {};
+  const M2 = j.pillarMax || {};
+  checks.push({
+    q:'Does the site look alive?',
+    v: j.daysSinceUpdate == null ? 'undated' : (j.daysSinceUpdate <= 90 ? 'recent' : j.daysSinceUpdate + ' days'),
+    bad: j.daysSinceUpdate == null || j.daysSinceUpdate > 365,
+    state: st(P2.freshness||0, M2.freshness||10, false),
+    facts: f(j.datedItems>0, (j.datedItems||0)+' dated items') + f((j.sitemapUrls||0)>0, (j.sitemapUrls||0)+' pages in the sitemap'),
+    why: j.datedItems ? 'There are dates an engine can use to judge whether this is current.'
+                      : 'Nothing on the site carries a date, so an engine cannot tell if it was updated last week or three years ago.'
+  });
   const off = [
-    ['backing','Does anyone else back you up?', (P2.offsite||0)+'/20',
+    ['backing','Does anyone else back you up?', (P2.offsite||0)+'/'+(M2.offsite||30),
      j.offsiteMeasured
        ? 'We asked the engines a buyer question in your category and read every source they cited. This score is what came back. Unlock to see the question, the sources, and who is in them instead of you.'
        : 'Scored from the external profiles your site claims. The engines were unreachable for the live citation test.'],
-    ['tech','Is the plumbing in order?', (P2.technical||0)+'/20',
+    ['tech','Is the plumbing in order?', (P2.technical||0)+'/'+(M2.technical||10),
      'Sitemap, canonical, meta description, title and llms.txt. Unlock to see which of them you are missing.']
   ];
 
@@ -432,19 +443,22 @@ function render(j){
       '<div class="why">'+o[3]+'</div></div>').join('');
 
   // ---- by layer ----
-  const P = j.pillars || { access:j.access, entity:j.identity, content:j.content, offsite:0, technical:0 };
+  const P = j.pillars || {};
+  const MAX = j.pillarMax || { access:20, entity:15, content:15, offsite:30, freshness:10, technical:10 };
   const layers = [
-    { q:'Getting in', got:P.access, max:20,
-      why:'Whether the crawlers behind ChatGPT, Claude and Perplexity are served a real page, or turned away.' },
-    { q:'Knowing who you are', got:P.entity, max:20,
-      why:'Structured data naming the business, a person behind it, an address, and external profiles that check out.' },
-    { q:'Having something worth quoting', got:P.content, max:20,
+    { k:'offsite', q:'Being cited elsewhere',
+      why:'We ask the engines a buyer question in your category and read every source they cite. This is the only pillar that measures whether AI actually names you, so it carries the most weight.' },
+    { k:'access', q:'Getting in',
+      why:'Whether the crawlers behind ChatGPT, Claude and Perplexity are served real pages. Tested across your site, not just the homepage.' },
+    { k:'entity', q:'Knowing who you are',
+      why:'Structured data naming the business, a person behind it, an address, and external profiles that resolve and name you.' },
+    { k:'content', q:'Having something worth quoting',
       why:'How much real text reaches the crawler, whether it is shaped like an answer, and whether the crawler sees what a visitor sees.' },
-    { q:'Being backed up elsewhere', got:P.offsite, max:20,
-      why:'Profiles your site claims, that actually resolve and name you. A link nobody can confirm is a claim, not corroboration.' },
-    { q:'Technical foundation', got:P.technical, max:20,
-      why:'Sitemap, canonical, meta description, title and llms.txt — the plumbing an engine expects to find.' }
-  ];
+    { k:'freshness', q:'Showing signs of life',
+      why:'Whether anything on the site is dated and recent. Engines lean on sources they can tell are maintained; an undated site looks abandoned.' },
+    { k:'technical', q:'Technical foundation',
+      why:'Sitemap, canonical, meta description, title and llms.txt - the plumbing an engine expects to find.' }
+  ].map(l => ({ q:l.q, got:(P[l.k]||0), max:(MAX[l.k]||20), why:l.why }));
   document.getElementById('layers').innerHTML = layers.map(l => {
     const pct = Math.round(l.got / l.max * 100);
     return '<div class="lay"><div class="layhead"><span class="layq">'+l.q+'</span>'+
