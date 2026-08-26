@@ -930,6 +930,26 @@ app.use(express.json());
 
 // Temporary: probe which model id / max_tokens the Anthropic API actually accepts,
 // so we stop guessing at the n8n node's 400. Returns the API's own error text.
+// Diagnostic: show exactly where the off-site measurement succeeds or dies.
+app.get("/api/offsite-probe", async (req, res) => {
+  const site = normalizeUrl(String(req.query.d || ""));
+  if (!site) return res.status(400).json({ error: "give me a domain" });
+  const out = { host: site.host, steps: [] };
+  try {
+    const q = await inferBuyerQuery(site);
+    out.steps.push({ step: "inferBuyerQuery", via: q.via || "fallback", query: q.query });
+    const bare = site.host.replace(/^www\./, "");
+    const r = await runCitationFinder(q.query, bare);
+    out.steps.push({ step: "runCitationFinder", error: r.error || null,
+                     sources: r.total || 0, mentioning: r.inCount || 0, engines: r.engines || [] });
+    const sig = await getCitationSignal(site, true);
+    out.steps.push({ step: "getCitationSignal", null: sig === null, ok: sig && sig.ok,
+                     fromCache: sig && sig.fromCache, buyerCited: sig && sig.buyerCited,
+                     buyerSources: sig && sig.buyerSources, query: sig && sig.query });
+  } catch (e) { out.threw = String(e).slice(0, 240); }
+  res.json(out);
+});
+
 app.get("/api/model-probe", async (req, res) => {
   const model = String(req.query.m || "claude-sonnet-5");
   const max_tokens = parseInt(req.query.mt || "64", 10);
