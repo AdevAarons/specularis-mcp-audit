@@ -201,10 +201,11 @@
     <div class="scap">AI visibility &middot; all five pillars</div>
     <div class="score">
       <b id="big"></b>
-      <span class="of">out of 100</span>
+      <span class="of" id="outof">out of 100</span>
       <span class="lab" id="lab"></span>
     </div>
     <div class="rank" id="rank"></div>
+    <div class="rank" id="unmeasured" style="display:none;color:var(--warn)"></div>
     <div class="verdict" id="verdict"></div>
     <p class="diag" id="diag"></p>
 
@@ -364,9 +365,11 @@ function render(j){
   const blocked = j.starBlocked || j.named.length || j.botBlocked;
   document.getElementById('dom').textContent = j.host + ' · checked just now';
   document.getElementById('big').textContent = j.total;
-  document.getElementById('big').style.color = col(j.total);
-  document.getElementById('lab').textContent = label(j.total);
-  document.getElementById('lab').style.color = col(j.total);
+  document.getElementById('big').style.color = col(j.pct != null ? j.pct : j.total);
+  const OUT = j.scoredOutOf || 100;
+  document.getElementById('outof').textContent = 'out of ' + OUT;
+  document.getElementById('lab').textContent = label(j.pct != null ? j.pct : j.total);
+  document.getElementById('lab').style.color = col(j.pct != null ? j.pct : j.total);
   document.getElementById('bsc').textContent = j.total;
   document.getElementById('bgr').textContent = j.grade;
 
@@ -380,6 +383,12 @@ function render(j){
     : (j.uniq.length
         ? 'The technical side is in reasonable shape. Whether AI recommends you depends on things that live outside your website.'
         : 'The crawlers get in, but nothing on the page tells them what your business is, so they infer it from your words.');
+
+  const um = document.getElementById('unmeasured');
+  if (j.offsiteMeasured === false) {
+    um.textContent = 'We could not reach the answer engines just now, so being cited elsewhere - normally 30 of the 100 points - is not included. This score is out of 70.';
+    um.style.display = 'block';
+  } else { um.style.display = 'none'; }
 
   const f = (ok,t) => '<i class="'+(ok?'':'no')+'">'+t+'</i>';
   // One rule for all three, so a near-perfect pillar is not filed next to a half-empty one.
@@ -426,7 +435,8 @@ function render(j){
                       : 'Nothing on the site carries a date, so an engine cannot tell if it was updated last week or three years ago.'
   });
   const off = [
-    ['backing','Does anyone else back you up?', (P2.offsite||0)+'/'+(M2.offsite||30),
+    ['backing','Does anyone else back you up?',
+     j.offsiteMeasured === false ? 'not measured' : (P2.offsite||0)+'/'+(M2.offsite||30),
      j.offsiteMeasured
        ? 'We asked the engines a buyer question in your category and read every source they cited. This score is what came back. Unlock to see the question, the sources, and who is in them instead of you.'
        : 'Scored from the external profiles your site claims. The engines were unreachable for the live citation test.'],
@@ -446,7 +456,7 @@ function render(j){
   const P = j.pillars || {};
   const MAX = j.pillarMax || { access:20, entity:15, content:15, offsite:30, freshness:10, technical:10 };
   const layers = [
-    { k:'offsite', q:'Being cited elsewhere',
+    { k:'offsite', q:'Being cited elsewhere', unmeasured: j.offsiteMeasured === false,
       why:'We ask the engines a buyer question in your category and read every source they cite. This is the only pillar that measures whether AI actually names you, so it carries the most weight.' },
     { k:'access', q:'Getting in',
       why:'Whether the crawlers behind ChatGPT, Claude and Perplexity are served real pages. Tested across your site, not just the homepage.' },
@@ -458,11 +468,12 @@ function render(j){
       why:'Whether anything on the site is dated and recent. Engines lean on sources they can tell are maintained; an undated site looks abandoned.' },
     { k:'technical', q:'Technical foundation',
       why:'Sitemap, canonical, meta description, title and llms.txt - the plumbing an engine expects to find.' }
-  ].map(l => ({ q:l.q, got:(P[l.k]||0), max:(MAX[l.k]||20), why:l.why }));
+  ].map(l => ({ q:l.q, got:(P[l.k]||0), max:(MAX[l.k]||20), why:l.why, unmeasured:!!l.unmeasured }));
   document.getElementById('layers').innerHTML = layers.map(l => {
     const pct = Math.round(l.got / l.max * 100);
     return '<div class="lay"><div class="layhead"><span class="layq">'+l.q+'</span>'+
-      '<span class="layn" style="color:'+col(pct)+'">'+l.got+' / '+l.max+'</span></div>'+
+      '<span class="layn" style="color:'+(l.unmeasured?'var(--warn)':col(pct))+'">'+
+      (l.unmeasured ? 'not measured' : l.got+' / '+l.max)+'</span></div>'+
       '<div class="bar"><span style="width:'+pct+'%;background:'+col(pct)+'"></span></div>'+
       '<div class="laywhy">'+l.why+'</div></div>';
   }).join('');
