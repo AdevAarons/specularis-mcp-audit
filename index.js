@@ -337,12 +337,22 @@ const scoreSnapshot = async (site, cite = null) => {
     : [];
   const deepPages = sample.length
     ? await Promise.all([...new Set(sample)].map(async (u) => {
-        const r = await fetchWithTimeout(u, { headers: { "User-Agent": BOT_UAS.GPTBot } }, 10000);
+        const get = (ms) => fetchWithTimeout(u, { headers: { "User-Agent": BOT_UAS.GPTBot } }, ms);
+        let r = await get(20000);
+        // status 0 means WE failed - timeout, DNS, aborted - not that they refused.
+        // Retry once, then give up and say we do not know rather than calling it a block.
+        if (r.status === 0) r = await get(25000);
         const w = (String(r.text || "").replace(/<[^>]+>/g, " ").match(/\S+/g) || []).length;
-        return { url: u, status: r.status, words: w, served: r.ok && !CHALLENGE_RX.test(r.text || "") && w > 40 };
+        const challenged = CHALLENGE_RX.test(r.text || "");
+        const refused = [401, 403, 404, 410, 429, 451].includes(r.status) || challenged;
+        const unknown = r.status === 0;
+        return { url: u, status: r.status, words: w,
+                 served: r.ok && !challenged && w > 40, refused, unknown };
       }))
     : [];
-  const deepBlocked = deepPages.filter(x => !x.served);
+  // Only an explicit refusal counts against the score. Our own timeouts never do.
+  const deepBlocked = deepPages.filter(x => x.refused);
+  const deepUnknown = deepPages.filter(x => x.unknown);
   const hasCanonical = /<link[^>]+rel=["']canonical["']/i.test(src);
 
   // Freshness. Engines lean hard on recently-updated sources, and most sites that
@@ -460,7 +470,9 @@ const scoreSnapshot = async (site, cite = null) => {
     pillarMax: { access: 20, entity: 15, content: 15, offsite: 30, freshness: 10, technical: 10 },
     daysSinceUpdate: daysSince, datedItems: dates.length, sitemapUrls,
     pagesTested: 1 + deepPages.length, pagesBlocked: deepBlocked.length,
-    deepPages: deepPages.map(x => ({ url: x.url, served: x.served, words: x.words })),
+    pagesUnknown: deepUnknown.length,
+    deepPages: deepPages.map(x => ({ url: x.url, served: x.served, refused: x.refused,
+                                     unknown: x.unknown, status: x.status, words: x.words })),
     hasCanonical, hasMetaDesc, hasTitle, answerShaped, questionHeads,
     profilesDeclared: profiles.length, profilesVerified: verifiedProfiles, sameAs: profiles,
     offsiteMeasured, citation: cite || null,
