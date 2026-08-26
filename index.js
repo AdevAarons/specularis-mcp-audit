@@ -699,6 +699,23 @@ const app = express();
 app.set("trust proxy", true); // Railway sits behind a proxy — trust X-Forwarded-For for real client IPs
 app.use(express.json());
 
+// Temporary: probe which model id / max_tokens the Anthropic API actually accepts,
+// so we stop guessing at the n8n node's 400. Returns the API's own error text.
+app.get("/api/model-probe", async (req, res) => {
+  const model = String(req.query.m || "claude-sonnet-5");
+  const max_tokens = parseInt(req.query.mt || "64", 10);
+  if (!ANTHROPIC_API_KEY) return res.json({ error: "no key on this server" });
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+      body: JSON.stringify({ model, max_tokens, temperature: 0, messages: [{ role: "user", content: "hi" }] }),
+    });
+    const body = await r.text();
+    res.json({ model, max_tokens, status: r.status, ok: r.ok, detail: body.slice(0, 300) });
+  } catch (e) { res.json({ model, max_tokens, error: String(e).slice(0, 200) }); }
+});
+
 app.get("/", (_req, res) => res.json({
   name: "specularis-ai-visibility-audit",
   status: "ok",
