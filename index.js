@@ -960,43 +960,6 @@ const app = express();
 app.set("trust proxy", true); // Railway sits behind a proxy — trust X-Forwarded-For for real client IPs
 app.use(express.json());
 
-// Temporary: probe which model id / max_tokens the Anthropic API actually accepts,
-// so we stop guessing at the n8n node's 400. Returns the API's own error text.
-// Diagnostic: show exactly where the off-site measurement succeeds or dies.
-app.get("/api/offsite-probe", async (req, res) => {
-  const site = normalizeUrl(String(req.query.d || ""));
-  if (!site) return res.status(400).json({ error: "give me a domain" });
-  const out = { host: site.host, steps: [] };
-  try {
-    const q = await inferBuyerQuery(site);
-    out.steps.push({ step: "inferBuyerQuery", via: q.via || "fallback", query: q.query });
-    const bare = site.host.replace(/^www\./, "");
-    const r = await runCitationFinder(q.query, bare);
-    out.steps.push({ step: "runCitationFinder", error: r.error || null,
-                     sources: r.total || 0, mentioning: r.inCount || 0, engines: r.engines || [] });
-    const sig = await getCitationSignal(site, true);
-    out.steps.push({ step: "getCitationSignal", null: sig === null, ok: sig && sig.ok,
-                     fromCache: sig && sig.fromCache, buyerCited: sig && sig.buyerCited,
-                     buyerSources: sig && sig.buyerSources, query: sig && sig.query });
-  } catch (e) { out.threw = String(e).slice(0, 240); }
-  res.json(out);
-});
-
-app.get("/api/model-probe", async (req, res) => {
-  const model = String(req.query.m || "claude-sonnet-5");
-  const max_tokens = parseInt(req.query.mt || "64", 10);
-  if (!ANTHROPIC_API_KEY) return res.json({ error: "no key on this server" });
-  try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-      body: JSON.stringify({ model, max_tokens, temperature: 0, messages: [{ role: "user", content: "hi" }] }),
-    });
-    const body = await r.text();
-    res.json({ model, max_tokens, status: r.status, ok: r.ok, detail: body.slice(0, 300) });
-  } catch (e) { res.json({ model, max_tokens, error: String(e).slice(0, 200) }); }
-});
-
 app.get("/", (_req, res) => res.json({
   name: "specularis-ai-visibility-audit",
   status: "ok",
@@ -1295,7 +1258,7 @@ const BENCH_LIST = [
   { d: "robinhood.com", cat: "Finance" },
   { d: "fidelity.com", cat: "Finance" },
 ];
-const BENCH = { at: 0, rows: [], skipped: 0, busy: false };
+const BENCH = { at: 0, rows: [], skipped: 0, busy: false, progress: 0, startedAt: 0 };
 
 // Small pool: polite to the targets, but 50 sites sequentially takes too long to warm.
 const mapPool = async (items, n, fn) => {
@@ -1310,12 +1273,16 @@ const refreshBenchmarks = async () => {
   if (BENCH.busy) return;
   BENCH.busy = true;
   try {
-    const settled = await mapPool(BENCH_LIST, 5, async (entry) => {
+    BENCH.startedAt = Date.now(); BENCH.progress = 0;
+    // Concurrency 1: each site costs two calls to a rate-limited search API, and
+    // anything higher turns the whole rebuild into a 429 storm that never lands.
+    const settled = await mapPool(BENCH_LIST, 1, async (entry) => {
       try {
         const site = normalizeUrl(entry.d);
         if (!site) return null;
         const cite = await getCitationSignal(site);
         const r = await scoreSnapshot(site, cite);
+        BENCH.progress++;
         if (r.inconclusive) return null;  // we were blocked, not the AI. Not a finding, do not publish.
         return {
           host: site.host.replace(/^www\./, ""),
@@ -1340,7 +1307,7 @@ const refreshBenchmarks = async () => {
 app.get("/api/benchmarks", (_req, res) => {
   try {
     // Never block the page on a cold cache: kick the refresh off and return what we have.
-    if (!BENCH.rows.length || Date.now() - BENCH.at > 86400000) refreshBenchmarks().catch(() => {});
+    if (!BENCH.rows.length || Date.now() - BENCH.at > 7 * 86400000) refreshBenchmarks().catch(() => {});
     const scores = BENCH.rows.map(r => r.total).sort((a, b) => a - b);
     const med = scores.length ? scores[Math.floor(scores.length / 2)] : null;
     res.set("Cache-Control", "public, max-age=3600");
@@ -1350,6 +1317,7 @@ app.get("/api/benchmarks", (_req, res) => {
       scanned: BENCH.rows.length,
       skipped: BENCH.skipped,
       building: !BENCH.rows.length,
+      progress: BENCH.busy ? BENCH.progress + " of " + BENCH_LIST.length : null,
       checked: BENCH.at ? new Date(BENCH.at).toISOString().slice(0, 10) : null,
     });
   } catch (e) { res.status(500).json({ rows: [] }); }
