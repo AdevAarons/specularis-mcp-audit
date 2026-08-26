@@ -325,6 +325,24 @@ const scoreSnapshot = async (site, cite = null) => {
   const llmsPresent = llmsText.length > 40;
   const llmsUseful = llmsPresent && /##|when to|use this|about/i.test(llmsText);
   const hasSitemap = sitemap.ok && /<urlset|<sitemapindex/i.test(sitemap.text || "");
+
+  // A homepage can be wide open while /blog is refused, and scoring access from the
+  // front door alone is how an audit tells someone 20/20 while half their site is
+  // invisible. Two extra pages, spread through the sitemap, no API cost.
+  const smLocs = [...String(sitemap.text || "").matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(x => x[1])
+    .filter(u => { try { return new URL(u).host.replace(/^www\./, "") === site.host.replace(/^www\./, ""); } catch (e) { return false; } })
+    .filter(u => u.replace(/\/$/, "") !== site.url.replace(/\/$/, ""));
+  const sample = smLocs.length
+    ? [smLocs[Math.floor(smLocs.length * 0.35)], smLocs[Math.floor(smLocs.length * 0.75)]].filter(Boolean)
+    : [];
+  const deepPages = sample.length
+    ? await Promise.all([...new Set(sample)].map(async (u) => {
+        const r = await fetchWithTimeout(u, { headers: { "User-Agent": BOT_UAS.GPTBot } }, 10000);
+        const w = (String(r.text || "").replace(/<[^>]+>/g, " ").match(/\S+/g) || []).length;
+        return { url: u, status: r.status, words: w, served: r.ok && !CHALLENGE_RX.test(r.text || "") && w > 40 };
+      }))
+    : [];
+  const deepBlocked = deepPages.filter(x => !x.served);
   const hasCanonical = /<link[^>]+rel=["']canonical["']/i.test(src);
 
   // Freshness. Engines lean hard on recently-updated sources, and most sites that
@@ -372,6 +390,9 @@ const scoreSnapshot = async (site, cite = null) => {
   if (starBlocked) pAccess = 0;
   else if (blockedBots.length === botNames.length) pAccess = 2;
   else if (blockedBots.length) pAccess = Math.max(5, 20 - blockedBots.length * 6);
+  // Deeper pages refused while the homepage is served is a genuine partial block,
+  // and it is invisible to any audit that only looks at "/".
+  if (pAccess > 2 && deepBlocked.length) pAccess = Math.max(4, pAccess - deepBlocked.length * 7);
 
   let pEntity = 0;                                   // out of 15
   if (valid > 0) pEntity += 4;
@@ -438,6 +459,8 @@ const scoreSnapshot = async (site, cite = null) => {
     pillars: { access: pAccess, entity: pEntity, content: pContent, offsite: pOffsite, freshness: pFresh, technical: pTechnical },
     pillarMax: { access: 20, entity: 15, content: 15, offsite: 30, freshness: 10, technical: 10 },
     daysSinceUpdate: daysSince, datedItems: dates.length, sitemapUrls,
+    pagesTested: 1 + deepPages.length, pagesBlocked: deepBlocked.length,
+    deepPages: deepPages.map(x => ({ url: x.url, served: x.served, words: x.words })),
     hasCanonical, hasMetaDesc, hasTitle, answerShaped, questionHeads,
     profilesDeclared: profiles.length, profilesVerified: verifiedProfiles, sameAs: profiles,
     offsiteMeasured, citation: cite || null,
@@ -612,8 +635,17 @@ const inferBuyerQuery = async (site) => {
         const t = (j.content || []).filter(b => b.type === "text").map(b => b.text).join(" ").trim()
           .replace(/^["'\s]+|["'\s.]+$/g, "");
         const brand = site.host.replace(/^www\./, "").split(".")[0].toLowerCase();
-        if (t && t.length > 8 && t.length < 130 && !t.toLowerCase().includes(brand)) {
-          return { query: t, title, city, via: "claude" };
+        // If the model slipped the brand in, cut it out rather than discarding the
+        // whole answer and falling back to string-slicing, which produced things
+        // like "who are the best Specularis is an AI visibility company in Miami".
+        let q = t;
+        if (q && q.toLowerCase().includes(brand)) {
+          q = q.replace(new RegExp(brand + "[a-z]*", "ig"), "").replace(/\s{2,}/g, " ")
+               .replace(/\s+(is|are|was)\s+(a|an|the)\s+/i, " ").trim()
+               .replace(/^[,\-\s]+|[,\-\s]+$/g, "");
+        }
+        if (q && q.length > 12 && q.length < 130 && !q.toLowerCase().includes(brand)) {
+          return { query: q, title, city, via: t === q ? "claude" : "claude-debranded" };
         }
       }
     } catch (e) {}
