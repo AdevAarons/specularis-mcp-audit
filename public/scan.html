@@ -181,7 +181,7 @@
 <div class="wrap">
 
   <h1>Can AI actually find you?</h1>
-  <p class="sub">Ten seconds, no signup. We look at your site the way ChatGPT, Claude and Perplexity do.</p>
+  <p class="sub">No signup. We look at your site the way ChatGPT, Claude and Perplexity do, then ask them a buyer question in your category.</p>
   <form class="ask" onsubmit="return run(event)">
     <input id="d" placeholder="yourbusiness.com" autocomplete="off" spellcheck="false" required>
     <button id="btn" type="submit">Check &rarr;</button>
@@ -220,8 +220,8 @@
 
     <div class="rest">
       <h3>Two pillars are counted but not explained</h3>
-      <p>Your score above already covers all five pillars, the same five the written report grades. What you can see here is the working behind three of them. Off-site corroboration and technical foundation are counted in the number but not shown.</p>
-      <p>Give us an email and we'll ask ChatGPT, Claude and Perplexity about you live, show which sources they cite and whether you are in them, and send the complete written report. The score does not change — you already have it.</p>
+      <p>Your score covers all five pillars, and the last two are already counted in it. What you cannot see yet is the reasoning: which buyer question we asked, which sources the engines cited, who is in those sources instead of you, and which pieces of technical plumbing are missing.</p>
+      <p>Give us an email. We'll open both of those up here with the short version, and send the long-form written report as a PDF. The score does not change, because you already have it.</p>
       <form class="mail" onsubmit="return sendFull(event)">
         <input id="nm" type="text" placeholder="First name" autocomplete="given-name" style="max-width:120px">
         <input id="em" type="email" placeholder="you@yourbusiness.com" required>
@@ -334,7 +334,7 @@ async function run(e){
   const d = document.getElementById('d').value.trim();
   const btn = document.getElementById('btn'), err = document.getElementById('err'), out = document.getElementById('out');
   if(!d) return false;
-  btn.disabled = true; btn.textContent = 'Checking…'; err.style.display='none'; out.style.display='none';
+  btn.disabled = true; btn.textContent = 'Asking the engines…'; err.style.display='none'; out.style.display='none';
   try{
     // Scan and leaderboard in parallel, so the rank line is ready with the score.
     const [sr, br] = await Promise.all([
@@ -413,9 +413,14 @@ function render(j){
       why: j.words < 250 ? 'That is far less than a visitor sees. Usually the page renders in the browser but not for the bot.'
                          : 'There is enough real text here for AI to lift an answer from.' }
   ];
+  const P2 = j.pillars || {};
   const off = [
-    ['backing','Does anyone else back you up?','locked','Directories, press and knowledge bases, all outside your site.'],
-    ['rec','Does AI recommend you today?','locked','We ask the engines the questions your buyers ask, and count how often your name comes back.']
+    ['backing','Does anyone else back you up?', (P2.offsite||0)+'/20',
+     j.offsiteMeasured
+       ? 'We asked the engines a buyer question in your category and read every source they cited. This score is what came back. Unlock to see the question, the sources, and who is in them instead of you.'
+       : 'Scored from the external profiles your site claims. The engines were unreachable for the live citation test.'],
+    ['tech','Is the plumbing in order?', (P2.technical||0)+'/20',
+     'Sitemap, canonical, meta description, title and llms.txt. Unlock to see which of them you are missing.']
   ];
 
   document.getElementById('checks').innerHTML =
@@ -423,7 +428,8 @@ function render(j){
       '<span class="ckv'+(c.bad?' bad':'')+'">'+c.v+'</span></div>'+
       '<div class="facts">'+c.facts+'</div><div class="why">'+c.why+'</div></div>').join('')
     + off.map(o => '<div class="ck off" id="ck-'+o[0]+'"><div class="ckhead"><span class="ckq">'+o[1]+
-      '</span><span class="ckv">'+o[2]+'</span></div><div class="why">'+o[3]+'</div></div>').join('');
+      '</span><span class="ckv" style="color:var(--ink)">'+o[2]+'</span></div>'+
+      '<div class="why">'+o[3]+'</div></div>').join('');
 
   // ---- by layer ----
   const P = j.pillars || { access:j.access, entity:j.identity, content:j.content, offsite:0, technical:0 };
@@ -545,17 +551,17 @@ async function sendFull(e){
   if(!em||!LAST) return false;
   const sent=document.getElementById('sent');
   sent.style.display='block';
-  sent.textContent='Asking ChatGPT, Claude and Perplexity about you. This takes a moment.';
+  sent.textContent='Opening up the last two pillars and building your report.';
   lens('goal');
-  setRow('backing','checking…','Querying the engines and reading what they cite.');
-  setRow('rec','checking…','Running a buyer-intent search for your category.');
+  setRow('backing','opening…','Pulling the buyer question and the sources the engines cited.');
+  setRow('tech','opening…','Listing which pieces of plumbing are missing.');
   try{
     const r = await fetch('/api/full-report',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({email:em,name:nm,role:rl,domain:LAST.host})});
     const j = await r.json();
     if(!j.live){ sent.textContent='The full report is on its way to your inbox.'; return false; }
     unlock(j);
-    sent.textContent='Unlocked above. The full written report is also on its way to your inbox.';
+    sent.textContent='Opened up above. The long-form report is on its way to your inbox as a PDF.';
   }catch(_){ sent.textContent='The full report is on its way to your inbox.'; }
   return false;
 }
@@ -568,42 +574,40 @@ function setRow(id, val, why){
 
 function unlock(j){
   const f=(ok,t)=>'<i class="'+(ok?'':'no')+'">'+t+'</i>';
-  const b=j.backing, r=j.recommended;
+  const b=j.backing, r=j.recommended, t=j.technical;
 
-  if(b){
-    const el=document.getElementById('ck-backing');
-    el.classList.remove('off');
-    const good=b.recognised && b.mentioning>0;
-    el.querySelector('.ckv').textContent = good ? 'confirmed' : (b.recognised ? 'thin' : 'not recognised');
-    el.querySelector('.ckv').classList.toggle('bad', !good);
-    el.querySelector('.why').insertAdjacentHTML('beforebegin',
-      '<div class="facts">'+f(b.recognised,'AI identifies the business')+
-      f(b.mentioning>0, b.mentioning+' of '+b.sources+' cited sources mention you')+'</div>');
-    el.querySelector('.why').textContent = b.recognised
-      ? (b.mentioning>0 ? 'Other sources back you up, which is what lets AI name you with confidence.'
-                        : 'AI knows the name but almost nothing independent confirms it. That is the gap.')
-      : 'When asked directly, AI could not confidently say who you are. Nothing outside your own site anchors the name.';
-    if(b.answer){
-      el.insertAdjacentHTML('beforeend','<div class="why" style="border-left:2px solid var(--rule);padding-left:12px;margin-top:12px">'+
-        '“'+esc(b.answer).slice(0,260)+'…”</div>');
-    }
-  }
-
-  if(r){
-    const el=document.getElementById('ck-rec');
+  // Pillar 4 — the short version of why the off-site score is what it is.
+  const el=document.getElementById('ck-backing');
+  if(el && r){
     el.classList.remove('off');
     const named = r.named>0;
-    el.querySelector('.ckv').textContent = named ? (r.named+' of '+r.sources) : 'not named';
-    el.querySelector('.ckv').classList.toggle('bad', !named);
     el.querySelector('.why').insertAdjacentHTML('beforebegin',
-      '<div class="facts">'+f(true,'“'+esc(r.query)+'”')+f(named, named ? 'you appear in '+r.named+' cited sources' : 'you appear in none of the cited sources')+'</div>');
+      '<div class="facts">'+f(true,'\u201c'+esc(r.query)+'\u201d')+
+      f(named, named ? 'you appear in '+r.named+' of '+r.sources+' cited sources'
+                     : 'you appear in none of the '+r.sources+' cited sources')+
+      (b?f(b.recognised,'engines can describe you by name'):'')+'</div>');
     el.querySelector('.why').textContent = named
-      ? 'You show up in what the engines cite for that question. That is the thing worth protecting.'
-      : 'We asked what your buyers would ask. The engines cited '+r.sources+' sources and you were not in any of them.';
+      ? 'You show up in what the engines cite for that question. That is the position worth defending.'
+      : 'That is the question your buyers ask. The engines answered it using '+r.sources+' sources and you were not in any of them. These are the sources to get into.';
     if(r.cited && r.cited.length){
       el.insertAdjacentHTML('beforeend','<div class="facts" style="margin-top:12px">'+
         r.cited.map(c=>f(c.you, esc(c.host))).join('')+'</div>');
     }
+  }
+
+  // Pillar 5 — which pieces of plumbing are actually missing.
+  const te=document.getElementById('ck-tech');
+  if(te && t){
+    te.classList.remove('off');
+    te.querySelector('.why').insertAdjacentHTML('beforebegin',
+      '<div class="facts">'+f(t.sitemap,'sitemap')+f(t.canonical,'canonical')+
+      f(t.metaDescription,'meta description')+f(t.title,'title')+
+      f(t.llms,'llms.txt')+f(t.llmsUseful,'llms.txt guidance')+'</div>');
+    const missing = [['sitemap',t.sitemap],['canonical',t.canonical],['meta description',t.metaDescription],
+                     ['title',t.title],['llms.txt',t.llms]].filter(x=>!x[1]).map(x=>x[0]);
+    te.querySelector('.why').textContent = missing.length
+      ? 'Missing: '+missing.join(', ')+'. Each one is a small fix and they compound.'
+      : 'Everything an engine expects to find is where it should be.';
   }
 
   // Locked rows are now answered, so the status lens should stop calling them locked.
