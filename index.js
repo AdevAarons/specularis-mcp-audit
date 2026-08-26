@@ -196,7 +196,7 @@ const scoreSnapshot = async (site) => {
   const renderGap = browserOk && browserWords > 300 && botBest < browserWords * 0.4;
 
   // schema: must actually parse and carry a name
-  let valid = 0; const types = [];
+  let valid = 0; const types = []; const sameAs = [];
   const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let m; const src = browser.text || "";
   while ((m = re.exec(src)) !== null) {
@@ -206,6 +206,7 @@ const scoreSnapshot = async (site) => {
         if (!n || !n["@type"]) continue;
         types.push([].concat(n["@type"]).join("/"));
         if (n.name || n.headline) valid++;
+        if (n.sameAs) [].concat(n.sameAs).forEach(u => { if (typeof u === "string" && /^https?:\/\//i.test(u)) sameAs.push(u); });
       }
     } catch (e) {}
   }
@@ -217,38 +218,79 @@ const scoreSnapshot = async (site) => {
   const llmsPresent = llmsText.length > 40;
   const llmsUseful = llmsPresent && /##|when to|use this|about/i.test(llmsText);
   const hasSitemap = sitemap.ok && /<urlset|<sitemapindex/i.test(sitemap.text || "");
+  const hasCanonical = /<link[^>]+rel=["']canonical["']/i.test(src);
+  const metaDesc = (src.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{1,400})["']/i) || [])[1] || "";
+  const hasMetaDesc = metaDesc.trim().length >= 50;
+  const hasTitle = /<title[^>]*>\s*\S[\s\S]{4,}?<\/title>/i.test(src);
+  // Content citability: is any of this shaped like an answer, rather than just long?
+  const headings = (src.match(/<h[23][^>]*>([\s\S]{3,160}?)<\/h[23]>/gi) || []);
+  const questionHeads = headings.filter(h => /\?|^\s*<h[23][^>]*>\s*(how|what|why|when|where|who|can|does|is|do)\b/i.test(h)).length;
+  const answerShaped = questionHeads >= 2 || uniq.some(t => /FAQPage|QAPage|HowTo/i.test(t));
 
-  // ---- scoring: 40 access / 30 identity / 30 content ----
-  let access = 40;
-  if (starBlocked) access = 0;
-  else if (blockedBots.length === botNames.length) access = 4;
-  else if (blockedBots.length) access = Math.max(10, 40 - blockedBots.length * 12);
-  if (access > 0 && !hasSitemap) access -= 4;
+  // Off-site: the schema declares external identities. Do they actually exist and name you?
+  const brandToken = site.host.replace(/^www\./, "").split(".")[0].replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const profiles = [...new Set(sameAs)].slice(0, 4);
+  let verifiedProfiles = 0;
+  if (profiles.length) {
+    const checks = await Promise.all(profiles.map(u => fetchWithTimeout(u, {}, 6000).catch(() => ({ ok: false, text: "" }))));
+    verifiedProfiles = checks.filter((c, i) => {
+      if (!c || !c.ok) return false;
+      const body = (c.text || "").toLowerCase();
+      // Many profile hosts refuse bots outright; a 2xx that names the brand is the only thing we count.
+      return brandToken.length > 2 && body.includes(brandToken);
+    }).length;
+  }
 
-  let identity = 0;
-  if (valid > 0) identity += 10;
-  if (hasOrg) identity += 9;
-  if (hasPerson) identity += 4;
-  if (hasAddress) identity += 3;
-  if (llmsPresent) identity += 2;
-  if (llmsUseful) identity += 2;
+  // ---- scoring: five pillars of 20, the same shape as the full audit, so the
+  // number a visitor sees here is the number the emailed report confirms. ----
+  let pAccess = 20;
+  if (starBlocked) pAccess = 0;
+  else if (blockedBots.length === botNames.length) pAccess = 2;
+  else if (blockedBots.length) pAccess = Math.max(5, 20 - blockedBots.length * 6);
 
-  let content = 0;
-  if (botBest >= 1200) content = 30; else if (botBest >= 600) content = 23;
-  else if (botBest >= 250) content = 15; else if (botBest >= 60) content = 7;
-  if (renderGap) content = Math.min(content, 10);
+  let pEntity = 0;
+  if (valid > 0) pEntity += 6;
+  if (hasOrg) pEntity += 5;
+  if (hasPerson) pEntity += 3;
+  if (hasAddress) pEntity += 2;
+  if (profiles.length >= 2) pEntity += 4; else if (profiles.length === 1) pEntity += 2;
+
+  let pContent = 0;
+  if (botBest >= 1200) pContent += 8; else if (botBest >= 600) pContent += 6;
+  else if (botBest >= 250) pContent += 4; else if (botBest >= 60) pContent += 2;
+  if (answerShaped) pContent += 6;
+  if (headings.length >= 3) pContent += 3;
+  if (!renderGap && botBest >= 250) pContent += 3;
+
+  // Declaring a profile is a claim; one that resolves and names you is corroboration.
+  let pOffsite = Math.min(20, profiles.length * 3 + verifiedProfiles * 4);
+
+  let pTechnical = 0;
+  if (hasSitemap) pTechnical += 6;
+  if (hasCanonical) pTechnical += 4;
+  if (hasMetaDesc) pTechnical += 4;
+  if (hasTitle) pTechnical += 3;
+  if (llmsPresent) pTechnical += 2;
+  if (llmsUseful) pTechnical += 1;
+
+  // Names kept for the three pillars the scan explains on screen.
+  const access = pAccess, identity = pEntity, content = pContent;
 
   // If a normal browser is ALSO refused, we are the ones being blocked (datacenter IP, geo, WAF).
   // That is not an AI-visibility finding and must not be scored as one.
   const allBotsRefused = botNames.every(n => !bots[n].served);
   const inconclusive = !browserOk && allBotsRefused && !starBlocked;
 
-  const total = inconclusive ? null : Math.max(0, Math.min(100, Math.round(access + identity + content)));
+  const total = inconclusive ? null
+    : Math.max(0, Math.min(100, Math.round(pAccess + pEntity + pContent + pOffsite + pTechnical)));
   const grade = inconclusive ? "?" : (total >= 85 ? "A" : total >= 70 ? "B" : total >= 55 ? "C" : total >= 40 ? "D" : "F");
 
   return { host: site.host, total, grade, inconclusive,
     inconclusiveReason: inconclusive ? "This site refused our request no matter who we said we were, including a normal browser. That usually means it blocks datacenter traffic, so we cannot tell what it does with AI crawlers from here." : null,
     access, identity, content,
+    pillars: { access: pAccess, entity: pEntity, content: pContent, offsite: pOffsite, technical: pTechnical },
+    hasCanonical, hasMetaDesc, hasTitle, answerShaped, questionHeads,
+    profilesDeclared: profiles.length, profilesVerified: verifiedProfiles, sameAs: profiles,
     starBlocked, named: blockedBots, botBlocked: blockedBots.length > 0 && browserOk,
     bots, browserWords, words: botBest, renderGap,
     uniq, validSchema: valid, hasOrg, hasPerson, hasAddress,
