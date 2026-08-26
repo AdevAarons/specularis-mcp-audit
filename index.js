@@ -210,10 +210,12 @@ const getCitationSignal = async (site, force = false) => {
 
   try {
     const inferred = await inferBuyerQuery(site);
-    const [ident, rec] = await Promise.all([
-      runCitationFinder("What is " + bare + "? Who runs it and what do they do?", bare),
-      runCitationFinder(inferred.query, bare),
-    ]);
+    // Sequential, not parallel. Two simultaneous calls to a rate-limited search API
+    // means one of them 429s and half the measurement silently comes back empty.
+    // The unbranded buyer query goes first because it carries most of the score.
+    const rec = await runCitationFinder(inferred.query, bare);
+    await new Promise(r => setTimeout(r, 1500));
+    const ident = await runCitationFinder("What is " + bare + "? Who runs it and what do they do?", bare);
     const answer = (!ident.error && ident.answer) || "";
     const v = {
       query: inferred.query,
@@ -713,6 +715,11 @@ const inferBuyerQuery = async (site) => {
     category = category.split(/\s+/).filter(w => !stop.test(w)).slice(0, 5).join(" ");
   }
   if (!category) category = "providers";
+  // "the best AI visibility company in Miami" reads wrong; buyers type plurals.
+  category = category.replace(/\b(company|agency|firm|studio|brokerage|consultancy)\b\s*$/i,
+    (w) => ({ company: "companies", agency: "agencies", firm: "firms", studio: "studios",
+              brokerage: "brokerages", consultancy: "consultancies" }[w.toLowerCase()] || w))
+    .replace(/\b(consultant|attorney|lawyer|dentist|contractor|agent|broker|platform|tool|service)\b\s*$/i, "$1s");
   const q = ("who are the best " + category + (city ? " in " + city : "")).replace(/\s{2,}/g, " ").slice(0, 120);
   return { query: q, title, city, via: "deterministic" };
 };
