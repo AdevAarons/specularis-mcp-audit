@@ -127,6 +127,70 @@ const quickSnapshot = async (site) => {
 };
 
 
+// ---- Deep audit: the comprehensive version, for prospect meetings ----
+// Differs from the free scan in three ways that cost real money and time, which
+// is exactly why it is not on the public page:
+//   1. tests pages across the site, not just the homepage
+//   2. asks several buyer questions across intent stages, not one
+//   3. routes through a residential proxy when PROXY_URL is set
+const DEEP_KEY = process.env.DEEP_KEY || process.env.DASHBOARD_KEY || "";
+const PROXY_URL = process.env.PROXY_URL || "";   // unset = datacenter IP, and we say so
+
+// A homepage can be wide open while /blog is refused. Free scan cannot afford to
+// look; this one must, because it is the single most common real-world pattern.
+const probePage = async (url) => {
+  const [asBrowser, asBot] = await Promise.all([
+    fetchWithTimeout(url, {}, 12000),
+    fetchWithTimeout(url, { headers: { "User-Agent": BOT_UAS.GPTBot } }, 12000),
+  ]);
+  const words = (t) => (String(t || "").replace(/<[^>]+>/g, " ").match(/\S+/g) || []).length;
+  const bw = words(asBrowser.text), gw = words(asBot.text);
+  const challenged = CHALLENGE_RX.test(asBot.text || "");
+  return {
+    url,
+    browser: { status: asBrowser.status, words: bw },
+    gptbot: { status: asBot.status, words: gw, challenged },
+    served: asBot.ok && !challenged && gw > 40,
+    thin: asBrowser.ok && bw > 300 && gw < bw * 0.4,
+  };
+};
+
+const pagesFromSitemap = async (site, n = 8) => {
+  const sm = await fetchWithTimeout(site.origin + "/sitemap.xml", {}, 12000);
+  const locs = [...String(sm.text || "").matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1]);
+  const same = locs.filter(u => { try { return new URL(u).host.replace(/^www\./, "") === site.host.replace(/^www\./, ""); } catch (e) { return false; } });
+  const home = site.url.replace(/\/$/, "");
+  const rest = same.filter(u => u.replace(/\/$/, "") !== home);
+  // spread across the sitemap rather than taking the first n, which are usually
+  // all top-level nav and tell you nothing about the deep pages
+  const step = Math.max(1, Math.floor(rest.length / (n - 1)));
+  const spread = [];
+  for (let i = 0; i < rest.length && spread.length < n - 1; i += step) spread.push(rest[i]);
+  return [site.url, ...spread];
+};
+
+const inferBuyerQueries = async (site) => {
+  const one = await inferBuyerQuery(site);
+  if (!ANTHROPIC_API_KEY) return [one.query];
+  const prompt = "A business at " + site.host + ". Write three different questions a potential customer " +
+    "would type into ChatGPT when they do NOT know this company exists: one ready-to-buy question, one " +
+    "comparing-options question, one early-research question. Use the category and location, never the brand " +
+    "name. One per line, no numbering, no quotes, each under 90 characters.";
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 200, messages: [{ role: "user", content: prompt }] }),
+    });
+    if (!r.ok) return [one.query];
+    const j = await r.json();
+    const lines = (j.content || []).filter(b => b.type === "text").map(b => b.text).join("\n")
+      .split("\n").map(x => x.replace(/^[-*\d.\s]+/, "").replace(/^["']|["']$/g, "").trim())
+      .filter(x => x.length > 12 && x.length < 120 && !x.toLowerCase().includes(site.host.split(".")[0].toLowerCase()));
+    return lines.length >= 2 ? lines.slice(0, 3) : [one.query];
+  } catch (e) { return [one.query]; }
+};
+
 // ---- Off-site corroboration, measured for real ----
 // Being cited is the thing that actually predicts AI visibility, so it belongs in
 // the score rather than behind the email gate. It costs two API calls, so cache it
@@ -1168,6 +1232,66 @@ app.get("/addons-switcher", (_req, res) => {
 app.get("/stats-bar", (_req, res) => {
   if (!STATS_BAR_HTML) return res.status(404).send("Not found");
   res.type("html").send(STATS_BAR_HTML);
+});
+
+// Deep audit API — key-gated, expensive, for prospect meetings and signing baselines
+app.get("/api/deep-scan", async (req, res) => {
+  if (DEEP_KEY && req.query.k !== DEEP_KEY) return res.status(401).json({ error: "Unauthorized" });
+  const site = normalizeUrl(String(req.query.d || ""));
+  if (!site) return res.status(400).json({ error: "Give me a domain" });
+  try {
+    const bare = site.host.replace(/^www\./, "");
+
+    // 1) the normal five-signal scan, plus a forced-fresh citation read
+    const cite = await getCitationSignal(site, true);
+    const base = await scoreSnapshot(site, cite);
+    if (base.inconclusive) return res.json({ inconclusive: true, host: bare, error: base.inconclusiveReason });
+
+    // 2) does the whole site let crawlers in, or only the front door?
+    const urls = await pagesFromSitemap(site, 8);
+    const pages = [];
+    for (const u of urls) { pages.push(await probePage(u)); }   // sequential: polite
+    const blockedPages = pages.filter(p => !p.served);
+    const thinPages = pages.filter(p => p.thin);
+
+    // 3) several buyer questions, not one, so the citation picture is stable
+    const queries = await inferBuyerQueries(site);
+    const runs = [];
+    for (const q of queries) {
+      const r = await runCitationFinder(q, bare);
+      if (!r.error) runs.push({ query: q, sources: r.total, named: r.inCount,
+        cited: r.sources.map(x => ({ host: x.host, you: !!x.appearsYou })) });
+    }
+
+    // 4) who keeps getting cited instead — this is the target list
+    const freq = new Map();
+    runs.forEach(run => run.cited.forEach(c => {
+      if (c.you) return;
+      freq.set(c.host, (freq.get(c.host) || 0) + 1);
+    }));
+    const competitors = [...freq.entries()].sort((a, b) => b[1] - a[1])
+      .slice(0, 15).map(([host, n]) => ({ host, citedIn: n, ofQueries: runs.length }));
+
+    const citedQueries = runs.filter(r => r.named > 0).length;
+
+    res.json({
+      host: bare,
+      measuredAt: new Date().toISOString(),
+      proxy: PROXY_URL ? "residential" : "datacenter",
+      total: base.total, grade: base.grade,
+      pillars: base.pillars, pillarMax: base.pillarMax,
+      siteWide: {
+        pagesTested: pages.length,
+        pagesBlocked: blockedPages.length,
+        pagesThin: thinPages.length,
+        homepageOnlyWouldHaveMissed: blockedPages.length > 0 && pages[0] && pages[0].served,
+        pages,
+      },
+      citation: { queriesTested: runs.length, queriesWhereCited: citedQueries, runs },
+      competitors,
+      freshness: { daysSinceUpdate: base.daysSinceUpdate, datedItems: base.datedItems, sitemapUrls: base.sitemapUrls },
+    });
+  } catch (e) { res.status(500).json({ error: "deep scan failed: " + String(e).slice(0, 160) }); }
 });
 
 // Internal client results dashboard — password-gated via ?k= or DASHBOARD_KEY env
