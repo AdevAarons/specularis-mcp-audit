@@ -431,7 +431,10 @@ const scoreSnapshot = async (site, cite = null) => {
     if (verifiedProfiles >= 2) pOffsite += 2;
     pOffsite = Math.min(30, pOffsite);
   } else {
-    pOffsite = Math.min(10, verifiedProfiles * 5);
+    // The engines were unreachable. Scoring this pillar anyway would report
+    // "barely cited" when the truth is "we did not look" - the same error as
+    // calling a timeout a block. Leave it unmeasured and score out of 70.
+    pOffsite = 0;
   }
 
   let pFresh = 0;                                    // out of 10
@@ -461,11 +464,15 @@ const scoreSnapshot = async (site, cite = null) => {
 
   const total = inconclusive ? null
     : Math.max(0, Math.min(100, Math.round(pAccess + pEntity + pContent + pOffsite + pFresh + pTechnical)));
-  const grade = inconclusive ? "?" : (total >= 85 ? "A" : total >= 70 ? "B" : total >= 55 ? "C" : total >= 40 ? "D" : "F");
+  const scoredOutOf = inconclusive ? null : (offsiteMeasured ? 100 : 70);
+  // Grade on the scale we actually scored against, so a 62/70 is not read as a 62/100.
+  const pct = inconclusive ? null : Math.round((total / scoredOutOf) * 100);
+  const grade = inconclusive ? "?" : (pct >= 85 ? "A" : pct >= 70 ? "B" : pct >= 55 ? "C" : pct >= 40 ? "D" : "F");
 
   return { host: site.host, total, grade, inconclusive,
     inconclusiveReason: inconclusive ? "This site refused our request no matter who we said we were, including a normal browser. That usually means it blocks datacenter traffic, so we cannot tell what it does with AI crawlers from here." : null,
     access, identity, content,
+    scoredOutOf, pct,
     pillars: { access: pAccess, entity: pEntity, content: pContent, offsite: pOffsite, freshness: pFresh, technical: pTechnical },
     pillarMax: { access: 20, entity: 15, content: 15, offsite: 30, freshness: 10, technical: 10 },
     daysSinceUpdate: daysSince, datedItems: dates.length, sitemapUrls,
@@ -624,6 +631,31 @@ const inferBuyerQuery = async (site) => {
     try {
       const j = JSON.parse(m[1]); const arr = Array.isArray(j) ? j : (j["@graph"] || [j]);
       for (const n of arr) { const a = (n && n.address) || {}; if (a.addressLocality) { city = a.addressLocality; break; } }
+    } catch (e) {}
+  }
+
+  const brandTok = site.host.replace(/^www\./, "").split(".")[0].toLowerCase();
+  const clean = (t) => {
+    let q = String(t || "").trim().replace(/^["'\s]+|["'\s.]+$/g, "").split("\n")[0];
+    if (q.toLowerCase().includes(brandTok)) {
+      q = q.replace(new RegExp(brandTok + "[a-z]*", "ig"), "").replace(/\s{2,}/g, " ")
+           .replace(/\s+(is|are|was)\s+(a|an|the)\s+/i, " ").trim().replace(/^[,\-\s]+|[,\-\s]+$/g, "");
+    }
+    return (q.length > 12 && q.length < 130 && !q.toLowerCase().includes(brandTok)) ? q : "";
+  };
+
+  // Perplexity first: it is already funded for the citation work, so one vendor
+  // running dry cannot silently zero the heaviest pillar.
+  if (PERPLEXITY_API_KEY) {
+    try {
+      const ask = "Title: " + title + "\nDescription: " + desc + (city ? "\nCity: " + city : "") +
+        "\n\nWrite the ONE question a customer would ask an AI assistant to find a business like this, " +
+        "without knowing the company exists. Use the category and location, never the brand name. " +
+        "Reply with the question only, under 90 characters.";
+      const pr = await callPerplexity(ask);
+      const t = pr && !pr.error ? (pr.choices?.[0]?.message?.content || "") : "";
+      const q = clean(t);
+      if (q) return { query: q, title, city, via: "perplexity" };
     } catch (e) {}
   }
 
