@@ -39,6 +39,14 @@
   form.ask button:disabled{ color:var(--soft); cursor:default; }
   .hint{ font-size:13px; color:var(--soft); margin-top:12px; }
 
+  /* Proof before the ask: a visitor who never scans still sees something real. */
+  .pre{ margin-top:30px; padding-top:18px; border-top:1px solid var(--rule); max-width:580px; }
+  .pre div{ font-size:13px; color:var(--soft); line-height:1.75; }
+  .pre b{ font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink); }
+  .pre .h{ color:var(--mid); }
+  .pre .sep{ color:var(--rule); margin:0 8px; }
+  .pre #preC{ color:var(--soft); }
+
   #out{ display:none; margin-top:64px; }
   .err{ display:none; margin-top:24px; color:var(--fail); font-size:15px; max-width:58ch; }
 
@@ -174,6 +182,12 @@
   </form>
   <p class="hint">We don't need your email for this part.</p>
 
+  <div class="pre" id="pre" style="display:none">
+    <div id="preA"></div>
+    <div id="preB"></div>
+    <div id="preC">Scan your domain to see where you land.</div>
+  </div>
+
   <p class="err" id="err"></p>
 
   <div id="out">
@@ -270,6 +284,25 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 const col = v => v>=85?'var(--good)':v>=60?'var(--warn)':'var(--fail)';
 const ord = n => n + (n%100>=11&&n%100<=13 ? 'th' : ['th','st','nd','rd'][n%10] || 'th');
 
+// Named sites are picked from the live data, never hard-coded, so the line
+// cannot drift into saying something that is no longer true.
+async function loadPreview(){
+  try{
+    const r = await fetch('/api/benchmarks'); const b = await r.json();
+    if(!b.rows || b.rows.length < 6) return;
+    const rows = b.rows;
+    const pick = rows.slice(-3).reverse().concat([rows[0]]);   // three worst, then the best
+    document.getElementById('preA').innerHTML =
+      '<b>' + rows.length + '</b> well-known sites, checked daily. Median score <b>' + b.median + '</b>.';
+    document.getElementById('preB').innerHTML = pick.map(x =>
+      '<span class="h">' + esc(x.host) + '</span> <b style="color:' + col(x.total) + '">' + x.total + '</b>'
+    ).join('<span class="sep">\u00b7</span>');
+    document.getElementById('pre').style.display = 'block';
+    postHeight();
+  }catch(_){}
+}
+addEventListener('DOMContentLoaded', loadPreview);
+
 async function run(e){
   e.preventDefault();
   const d = document.getElementById('d').value.trim();
@@ -287,6 +320,7 @@ async function run(e){
     if(!sr.ok){ err.textContent = j.error || 'Something went wrong.'; err.style.display='block'; return false; }
     BENCH = br ? await br.json().catch(()=>null) : null;
     LAST = j;
+    document.getElementById('pre').style.display='none';   // the real table supersedes it
     render(j);
     out.style.display='block';
     postHeight();
