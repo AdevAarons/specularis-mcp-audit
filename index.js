@@ -862,6 +862,15 @@ app.get("/api/scan", async (req, res) => {
     const cite = await getCitationSignal(site);
     const r = await scoreSnapshot(site, cite);
     r.badge = badgeUrl(site.host.replace(/^www\./, ""), r.total, r.grade);
+    // Pillars 4 and 5 are scored in the open but explained only after an email.
+    // Strip the working: which query, which sources, what is missing technically.
+    delete r.citation;
+    delete r.sameAs;
+    r.locked = {
+      offsite: { measured: !!r.offsiteMeasured, score: r.pillars.offsite },
+      technical: { score: r.pillars.technical },
+    };
+    delete r.hasCanonical; delete r.hasMetaDesc; delete r.hasTitle;
     if (r.inconclusive) return res.status(200).json({ inconclusive: true, host: r.host, error: r.inconclusiveReason });
     if (!r.reachable && !r.botBlocked) return res.status(502).json({ error: "Could not reach that site. Check the domain and try again." });
     res.json(r);
@@ -925,6 +934,13 @@ app.post("/api/full-report", async (req, res) => {
       recommended: c && c.ok ? {
         query: c.query, sources: c.buyerSources, named: c.buyerCited,
         engines: c.engines, cited: c.cited.slice(0, 6)
+      } : null,
+      // pillar 5's working, so the page can explain the technical score too
+      technical: snap ? {
+        score: snap.pillars.technical,
+        sitemap: snap.hasSitemap, canonical: snap.hasCanonical,
+        metaDescription: snap.hasMetaDesc, title: snap.hasTitle,
+        llms: snap.llmsPresent, llmsUseful: snap.llmsUseful,
       } : null
     });
   } catch (e) { res.status(500).json({ error: "internal error" }); }
