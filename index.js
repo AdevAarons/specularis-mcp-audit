@@ -253,7 +253,7 @@ const scoreSnapshot = async (site) => {
   if (hasOrg) pEntity += 5;
   if (hasPerson) pEntity += 3;
   if (hasAddress) pEntity += 2;
-  if (profiles.length >= 2) pEntity += 4; else if (profiles.length === 1) pEntity += 2;
+  if (verifiedProfiles >= 2) pEntity += 4; else if (verifiedProfiles === 1) pEntity += 2;
 
   let pContent = 0;
   if (botBest >= 1200) pContent += 8; else if (botBest >= 600) pContent += 6;
@@ -262,8 +262,9 @@ const scoreSnapshot = async (site) => {
   if (headings.length >= 3) pContent += 3;
   if (!renderGap && botBest >= 250) pContent += 3;
 
-  // Declaring a profile is a claim; one that resolves and names you is corroboration.
-  let pOffsite = Math.min(20, profiles.length * 3 + verifiedProfiles * 4);
+  // Only verified profiles count. A sameAs nobody can confirm is a claim, not
+  // corroboration, and paying points for it is how the old scale reached 100.
+  let pOffsite = Math.min(20, verifiedProfiles * 5);
 
   let pTechnical = 0;
   if (hasSitemap) pTechnical += 6;
