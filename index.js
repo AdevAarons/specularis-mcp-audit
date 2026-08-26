@@ -1129,13 +1129,17 @@ app.post("/api/full-report", async (req, res) => {
     const authoritative = snap && !snap.inconclusive ? {
       total_score: snap.total,
       grade: snap.grade,
+      scored_out_of: snap.scoredOutOf,
+      offsite_measured: snap.offsiteMeasured,
       pillar_scores: {
         crawler_access: snap.pillars.access,
         entity_schema: snap.pillars.entity,
         content_citability: snap.pillars.content,
         off_site: snap.pillars.offsite,
+        freshness: snap.pillars.freshness,
         technical: snap.pillars.technical,
       },
+      pillar_max: snap.pillarMax,
     } : null;
     const auditPayload = { name: leadName, email, website_url: site.url,
                            role: role || "Other", scores: authoritative };
