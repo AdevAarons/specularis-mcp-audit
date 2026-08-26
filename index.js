@@ -127,6 +127,45 @@ const quickSnapshot = async (site) => {
 };
 
 
+// ---- Off-site corroboration, measured for real ----
+// Being cited is the thing that actually predicts AI visibility, so it belongs in
+// the score rather than behind the email gate. It costs two API calls, so cache it
+// hard: a domain's citation footprint does not move hour to hour.
+const CITE_TTL = 7 * 24 * 60 * 60 * 1000;
+const CITE_CACHE = new Map();
+
+const getCitationSignal = async (site) => {
+  const bare = site.host.replace(/^www\./, "");
+  const hit = CITE_CACHE.get(bare);
+  if (hit && Date.now() - hit.at < CITE_TTL) return hit.v;
+  if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) return null;
+
+  try {
+    const inferred = await inferBuyerQuery(site);
+    const [ident, rec] = await Promise.all([
+      runCitationFinder("What is " + bare + "? Who runs it and what do they do?", bare),
+      runCitationFinder(inferred.query, bare),
+    ]);
+    const answer = (!ident.error && ident.answer) || "";
+    const v = {
+      query: inferred.query,
+      // unbranded: asked for the best in the category, was this business cited?
+      buyerSources: rec.error ? 0 : rec.total,
+      buyerCited: rec.error ? 0 : rec.inCount,
+      // branded: asked about them by name, does the engine know them and do
+      // independent sources confirm it?
+      brandSources: ident.error ? 0 : ident.total,
+      brandMentions: ident.error ? 0 : ident.inCount,
+      recognised: answer.toLowerCase().includes(bare.split(".")[0].toLowerCase()),
+      cited: rec.error ? [] : rec.sources.slice(0, 8).map(x => ({ host: x.host, you: !!x.appearsYou })),
+      engines: [...new Set([...(ident.engines || []), ...(rec.engines || [])])],
+      ok: !rec.error || !ident.error,
+    };
+    CITE_CACHE.set(bare, { at: Date.now(), v });
+    return v;
+  } catch (e) { return null; }
+};
+
 // ---- Instant scan: score a site from cheap signals only (no LLM calls) ----
 const BOT_UAS = {
   GPTBot: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot",
@@ -162,7 +201,7 @@ const robotsBlocks = (robotsText, ua) => {
   return disallowRoot && !allowRoot;
 };
 
-const scoreSnapshot = async (site) => {
+const scoreSnapshot = async (site, cite = null) => {
   const [robots, browser, llms, sitemap] = await Promise.all([
     fetchWithTimeout(site.origin + "/robots.txt"),
     fetchWithTimeout(site.url),
@@ -262,9 +301,23 @@ const scoreSnapshot = async (site) => {
   if (headings.length >= 3) pContent += 3;
   if (!renderGap && botBest >= 250) pContent += 3;
 
-  // Only verified profiles count. A sameAs nobody can confirm is a claim, not
-  // corroboration, and paying points for it is how the old scale reached 100.
-  let pOffsite = Math.min(20, verifiedProfiles * 5);
+  // Off-site is scored on whether the engines actually cite this business, not on
+  // whether it links to its own profiles. Unbranded discovery carries most of the
+  // weight: that is where new customers come from.
+  let pOffsite = 0;
+  let offsiteMeasured = false;
+  if (cite && cite.ok) {
+    offsiteMeasured = true;
+    pOffsite += Math.min(12, cite.buyerCited * 4);          // cited for a buyer query
+    if (cite.recognised) pOffsite += 3;                      // engine can describe you
+    if (cite.brandMentions > 0) pOffsite += Math.min(3, cite.brandMentions);
+    if (verifiedProfiles >= 2) pOffsite += 2;                // declared identities check out
+    pOffsite = Math.min(20, pOffsite);
+  } else {
+    // No engine data: fall back to the weak proxy rather than scoring a zero we
+    // cannot defend, and say so in the response.
+    pOffsite = Math.min(8, verifiedProfiles * 4);
+  }
 
   let pTechnical = 0;
   if (hasSitemap) pTechnical += 6;
@@ -292,6 +345,7 @@ const scoreSnapshot = async (site) => {
     pillars: { access: pAccess, entity: pEntity, content: pContent, offsite: pOffsite, technical: pTechnical },
     hasCanonical, hasMetaDesc, hasTitle, answerShaped, questionHeads,
     profilesDeclared: profiles.length, profilesVerified: verifiedProfiles, sameAs: profiles,
+    offsiteMeasured, citation: cite || null,
     starBlocked, named: blockedBots, botBlocked: blockedBots.length > 0 && browserOk,
     bots, browserWords, words: botBest, renderGap,
     uniq, validSchema: valid, hasOrg, hasPerson, hasAddress,
@@ -805,7 +859,8 @@ app.get("/api/scan", async (req, res) => {
     if (!rl.ok) return res.status(429).json({ error: rl.reason === "daily"
       ? "This free tool has hit today's limit. Try again tomorrow, or run the full audit."
       : "That's a few checks in a short window. Give it a minute." });
-    const r = await scoreSnapshot(site);
+    const cite = await getCitationSignal(site);
+    const r = await scoreSnapshot(site, cite);
     r.badge = badgeUrl(site.host.replace(/^www\./, ""), r.total, r.grade);
     if (r.inconclusive) return res.status(200).json({ inconclusive: true, host: r.host, error: r.inconclusiveReason });
     if (!r.reachable && !r.botBlocked) return res.status(502).json({ error: "Could not reach that site. Check the domain and try again." });
@@ -836,7 +891,8 @@ app.post("/api/full-report", async (req, res) => {
     // 1) kick off the full n8n audit so the PDF still lands in their inbox.
     //    The scan already scored this site; send those numbers along so the report
     //    explains them rather than grading it a second time and disagreeing.
-    const snap = await scoreSnapshot(site).catch(() => null);
+    const citeForReport = await getCitationSignal(site).catch(() => null);
+    const snap = await scoreSnapshot(site, citeForReport).catch(() => null);
     const authoritative = snap && !snap.inconclusive ? {
       total_score: snap.total,
       grade: snap.grade,
@@ -857,30 +913,18 @@ app.post("/api/full-report", async (req, res) => {
                         note: "Full report is on its way by email." });
     }
 
-    // 2) run the two locked checks live so the page can unlock in place
-    const inferred = await inferBuyerQuery(site);
-    const [ident, rec] = await Promise.all([
-      runCitationFinder("What is " + bare + "? Who runs it and what do they do?", bare),
-      runCitationFinder(inferred.query, bare),
-    ]);
-
-    const identOk = !ident.error;
-    const recOk = !rec.error;
-    const answer = (identOk && ident.answer) || "";
-    const namedInAnswer = answer.toLowerCase().includes(bare.split(".")[0].toLowerCase());
-
+    // 2) the citation data is already measured and cached from the scan, so the
+    //    page shows the same numbers the score was built from. Nothing moves.
+    const c = citeForReport;
     res.json({
-      emailed: true, live: true, sentToN8n: auditPayload,
-      backing: identOk ? {
-        sources: ident.total, mentioning: ident.inCount,
-        recognised: namedInAnswer,
-        answer: answer.slice(0, 400),
-        engines: ident.engines
+      emailed: true, live: !!(c && c.ok), sentToN8n: auditPayload,
+      backing: c && c.ok ? {
+        sources: c.brandSources, mentioning: c.brandMentions,
+        recognised: c.recognised, engines: c.engines
       } : null,
-      recommended: recOk ? {
-        query: rec.query, sources: rec.total, named: rec.inCount,
-        engines: rec.engines,
-        cited: rec.sources.slice(0, 6).map(s => ({ host: s.host, type: s.type, you: !!s.appearsYou }))
+      recommended: c && c.ok ? {
+        query: c.query, sources: c.buyerSources, named: c.buyerCited,
+        engines: c.engines, cited: c.cited.slice(0, 6)
       } : null
     });
   } catch (e) { res.status(500).json({ error: "internal error" }); }
@@ -1026,7 +1070,8 @@ const refreshBenchmarks = async () => {
       try {
         const site = normalizeUrl(entry.d);
         if (!site) return null;
-        const r = await scoreSnapshot(site);
+        const cite = await getCitationSignal(site);
+        const r = await scoreSnapshot(site, cite);
         if (r.inconclusive) return null;  // we were blocked, not the AI. Not a finding, do not publish.
         return {
           host: site.host.replace(/^www\./, ""),
