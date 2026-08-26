@@ -656,7 +656,14 @@ const app = express();
 app.set("trust proxy", true); // Railway sits behind a proxy — trust X-Forwarded-For for real client IPs
 app.use(express.json());
 
-app.get("/", (_req, res) => res.json({ name: "specularis-ai-visibility-audit", status: "ok", mcp: "/mcp" }));
+app.get("/", (_req, res) => res.json({
+  name: "specularis-ai-visibility-audit",
+  status: "ok",
+  mcp: "/mcp",
+  // Whether the badge signing key is a real one or the public fallback baked into
+  // the repo. A boolean only — never the value, and never a hash of it.
+  badgeSecretSet: BADGE_SECRET !== "specularis-badge-dev-secret",
+}));
 
 
 // Public sample audit report (embedded by URL on specularisinc.com/sample-report)
