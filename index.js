@@ -644,9 +644,10 @@ const inferBuyerQuery = async (site) => {
     return (q.length > 12 && q.length < 130 && !q.toLowerCase().includes(brandTok)) ? q : "";
   };
 
-  // Perplexity first: it is already funded for the citation work, so one vendor
-  // running dry cannot silently zero the heaviest pillar.
-  if (PERPLEXITY_API_KEY) {
+  // Deliberately NOT Perplexity: it is the scarce, rate-limited resource doing the
+  // actual citation work, and spending a call there to write a question is what
+  // pushed it into 429s. Claude is cheap for this, and the fallback below is real.
+  if (false && PERPLEXITY_API_KEY) {
     try {
       const ask = "Title: " + title + "\nDescription: " + desc + (city ? "\nCity: " + city : "") +
         "\n\nWrite the ONE question a customer would ask an AI assistant to find a business like this, " +
@@ -695,16 +696,40 @@ const inferBuyerQuery = async (site) => {
     } catch (e) {}
   }
 
-  // fallback: crude but safe
-  const noun = (desc || title).replace(/\s+/g, " ").split(/[|\u2013\u2014\-·,.]/)[0].trim().slice(0, 48);
-  return { query: ("who are the best " + (noun || "providers") + (city ? " in " + city : "")).slice(0, 120), title, city, via: "fallback" };
+  // Deterministic fallback. Pull the category out of the copy and drop the brand,
+  // rather than slicing a title and hoping. This runs whenever no model is reachable,
+  // so it has to produce something a real buyer might actually type.
+  const stop = /^(the|a|an|and|for|with|your|our|we|is|are|to|of|in|on|that|this|by|best|top|leading|premier)$/i;
+  const text = (desc + " " + title).replace(/\s+/g, " ");
+  const debranded = text.replace(new RegExp(brandTok + "[a-z]*", "ig"), " ").replace(/\s{2,}/g, " ");
+  // longest run of words that reads like a category: "ai visibility agency", "real estate brokerage"
+  const CATEGORY = /\b((?:[a-z][a-z&/-]{1,18}\s+){0,3}(agency|agencies|consultant|consultants|firm|company|studio|brokerage|broker|agent|agents|attorney|attorneys|lawyer|lawyers|dentist|clinic|contractor|marketing|services|service|software|platform|tool))\b/i;
+  const m2 = debranded.match(CATEGORY);
+  let category = m2 ? m2[1].trim() : "";
+  category = category.split(/\s+/).filter(w => !stop.test(w)).join(" ").trim();
+  if (category.length < 4) {
+    category = debranded.split(/[|\u2013\u2014\-·,.]/).map(x => x.trim())
+      .filter(x => x.length > 6 && x.length < 46 && !/^https?:/i.test(x))[0] || "";
+    category = category.split(/\s+/).filter(w => !stop.test(w)).slice(0, 5).join(" ");
+  }
+  if (!category) category = "providers";
+  const q = ("who are the best " + category + (city ? " in " + city : "")).replace(/\s{2,}/g, " ").slice(0, 120);
+  return { query: q, title, city, via: "deterministic" };
 };
 
 const runCitationFinder = async (query, domain) => {
   const site = normalizeUrl(domain);
   const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
   const q = String(query).slice(0, 300);
-  const [pplx, claude] = await Promise.all([callPerplexity(q), callClaude(q)]);
+  let [pplx, claude] = await Promise.all([callPerplexity(q), callClaude(q)]);
+  // A 429 is "slow down", not "no". Waiting four seconds beats telling someone
+  // their off-site score could not be measured.
+  const rateLimited = (x) => x && x.error && /429/.test(String(x.error));
+  if (rateLimited(pplx)) {
+    await new Promise(r => setTimeout(r, 4000));
+    pplx = await callPerplexity(q);
+    if (rateLimited(pplx)) { await new Promise(r => setTimeout(r, 8000)); pplx = await callPerplexity(q); }
+  }
   if ((!pplx || pplx.error) && (!claude || claude.error)) return { error: pplx?.error || claude?.error || "AI query failed" };
 
   const raw = [];
