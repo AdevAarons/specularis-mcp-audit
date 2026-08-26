@@ -291,7 +291,27 @@ async function loadPreview(){
     const r = await fetch('/api/benchmarks'); const b = await r.json();
     if(!b.rows || b.rows.length < 6) return;
     const rows = b.rows;
-    const pick = rows.slice(-3).reverse().concat([rows[0]]);   // three worst, then the best
+
+    // Real estate is the market we sell into. Naming a brokerage in the opening
+    // line reads as an insult before we have said anything useful; the full table
+    // after a scan still shows it, where it lands as diagnosis instead.
+    const HIDE = ['Real estate'];
+    // Fixed names so every visitor sees the same four and nothing surprises us.
+    // Scores stay live, so the line can never go stale.
+    const PINNED = ['bestbuy.com', 'nytimes.com', 'salesforce.com', 'atlassian.com'];
+
+    const eligible = rows.filter(x => HIDE.indexOf(x.cat) === -1);
+    if (!eligible.length) return;
+    const byHost = {};
+    eligible.forEach(x => { byHost[x.host] = x; });
+
+    let pick = PINNED.map(h => byHost[h]).filter(Boolean);
+    if (pick.length < 4) {                      // a pinned site was unscorable today
+      const spare = eligible.slice(-3).reverse().concat([eligible[0]])
+        .filter(x => pick.indexOf(x) === -1);
+      pick = pick.concat(spare).slice(0, 4);
+    }
+    pick.sort((a, c) => a.total - c.total);     // worst first, so the line ends on a high
     document.getElementById('preA').innerHTML =
       '<b>' + rows.length + '</b> well-known sites, checked daily. Median score <b>' + b.median + '</b>.';
     document.getElementById('preB').innerHTML = pick.map(x =>
