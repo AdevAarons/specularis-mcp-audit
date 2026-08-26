@@ -812,8 +812,23 @@ app.post("/api/full-report", async (req, res) => {
       .replace(/\b\w/g, (c) => c.toUpperCase());
     const leadName = (name && String(name).trim()) || tidy || "there";
 
-    // 1) kick off the full n8n audit so the PDF still lands in their inbox
-    triggerFullAudit({ name: leadName, email, website_url: site.url, role: role || "Other" })
+    // 1) kick off the full n8n audit so the PDF still lands in their inbox.
+    //    The scan already scored this site; send those numbers along so the report
+    //    explains them rather than grading it a second time and disagreeing.
+    const snap = await scoreSnapshot(site).catch(() => null);
+    const authoritative = snap && !snap.inconclusive ? {
+      total_score: snap.total,
+      grade: snap.grade,
+      pillar_scores: {
+        crawler_access: snap.pillars.access,
+        entity_schema: snap.pillars.entity,
+        content_citability: snap.pillars.content,
+        off_site: snap.pillars.offsite,
+        technical: snap.pillars.technical,
+      },
+    } : null;
+    triggerFullAudit({ name: leadName, email, website_url: site.url, role: role || "Other",
+                       scores: authoritative })
       .catch(() => {});
 
     if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) {
