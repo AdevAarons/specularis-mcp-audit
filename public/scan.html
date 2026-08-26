@@ -198,7 +198,7 @@
 
   <div id="out">
     <div class="dom m" id="dom"></div>
-    <div class="scap">Site readiness &middot; 3 of the 5 pillars we grade</div>
+    <div class="scap">AI visibility &middot; all five pillars</div>
     <div class="score">
       <b id="big"></b>
       <span class="of">out of 100</span>
@@ -219,9 +219,9 @@
     <div class="view" id="view-status"><div id="statuses"></div></div>
 
     <div class="rest">
-      <h3>Two pillars are still locked</h3>
-      <p>The number above grades three pillars: whether AI gets in, whether it can tell who you are, and whether there is anything worth quoting. The full audit grades five, adding off-site corroboration and technical foundation. Those two are the harder ones, so expect the full score to come in below the number above. That gap is the part you cannot see yet, and it is usually where the real problem is.</p>
-      <p>Give us an email and we'll run the off-site checks live, right here, and send the complete five-pillar report.</p>
+      <h3>Two pillars are counted but not explained</h3>
+      <p>Your score above already covers all five pillars, the same five the written report grades. What you can see here is the working behind three of them. Off-site corroboration and technical foundation are counted in the number but not shown.</p>
+      <p>Give us an email and we'll ask ChatGPT, Claude and Perplexity about you live, show which sources they cite and whether you are in them, and send the complete written report. The score does not change — you already have it.</p>
       <form class="mail" onsubmit="return sendFull(event)">
         <input id="nm" type="text" placeholder="First name" autocomplete="given-name" style="max-width:120px">
         <input id="em" type="email" placeholder="you@yourbusiness.com" required>
@@ -240,7 +240,7 @@
 
     <div class="mark">
       <div class="markbox">
-        <div class="t">Site Readiness</div>
+        <div class="t">AI Visibility</div>
         <div class="v"><span id="bsc"></span> <span id="bgr"></span></div>
       </div>
       <div class="grab">
@@ -426,13 +426,18 @@ function render(j){
       '</span><span class="ckv">'+o[2]+'</span></div><div class="why">'+o[3]+'</div></div>').join('');
 
   // ---- by layer ----
+  const P = j.pillars || { access:j.access, entity:j.identity, content:j.content, offsite:0, technical:0 };
   const layers = [
-    { q:'Getting in', got:j.access, max:40,
-      why:'Whether the crawlers behind ChatGPT, Claude and Perplexity are served a real page, and whether a sitemap points them at the rest of it.' },
-    { q:'Knowing who you are', got:j.identity, max:30,
-      why:'Structured data naming the business, a person behind it, an address, and an llms.txt that says what you do.' },
-    { q:'Having something to read', got:j.content, max:30,
-      why:'How much real text reaches the crawler, and whether the crawler sees the same page a visitor does.' }
+    { q:'Getting in', got:P.access, max:20,
+      why:'Whether the crawlers behind ChatGPT, Claude and Perplexity are served a real page, or turned away.' },
+    { q:'Knowing who you are', got:P.entity, max:20,
+      why:'Structured data naming the business, a person behind it, an address, and external profiles that check out.' },
+    { q:'Having something worth quoting', got:P.content, max:20,
+      why:'How much real text reaches the crawler, whether it is shaped like an answer, and whether the crawler sees what a visitor sees.' },
+    { q:'Being backed up elsewhere', got:P.offsite, max:20,
+      why:'Profiles your site claims, that actually resolve and name you. A link nobody can confirm is a claim, not corroboration.' },
+    { q:'Technical foundation', got:P.technical, max:20,
+      why:'Sitemap, canonical, meta description, title and llms.txt — the plumbing an engine expects to find.' }
   ];
   document.getElementById('layers').innerHTML = layers.map(l => {
     const pct = Math.round(l.got / l.max * 100);
@@ -487,8 +492,8 @@ function renderBench(j){
     '<button class="'+(c===CAT?'on':'')+'" onclick="setCat('+JSON.stringify(c).replace(/"/g,'&quot;')+')">'+esc(c)+'</button>').join('');
 
   const note = [];
-  note.push('This score covers what AI can see when it visits a site: whether it gets in, whether it can tell who you are, and whether there is anything to read. It does not include the two off-site checks, which are the harder ones.');
-  note.push('We keep our own site off this table on purpose. It scores 100 on these three checks, because we built it against them, but our full audit grades five pillars including off-site corroboration and puts the same domain at 77. Ranking ourselves first on the easy three would not tell you anything.');
+  note.push('Every site here is graded on the same five pillars as the written report, out of 20 each: getting in, knowing who you are, having something worth quoting, being backed up elsewhere, and technical foundation.');
+  note.push('We keep our own site off this table on purpose. Scoring ourselves on our own test and then publishing the ranking would not tell you anything useful.');
   if(b.skipped) note.push(b.skipped+' more well-known sites refused our request no matter who we said we were, including a plain browser. We left them off rather than score them a zero we could not stand behind.');
   document.getElementById('benchnote').textContent = note.join(' ');
 
@@ -522,7 +527,7 @@ function paint(){
 function cp(btn, kind){
   if(!LAST) return;
   const url='https://www.specularisinc.com/free-audit';
-  const alt='Site readiness '+LAST.total+'/100, checked by Specularis';
+  const alt='AI visibility '+LAST.total+'/100, checked by Specularis';
   const img='https://specularis-mcp-audit-production.up.railway.app'+(LAST.badge||'/badge.svg?d='+encodeURIComponent(LAST.host));
   const v = kind==='md' ? '[!['+alt+']('+img+')]('+url+')'
           : kind==='html' ? '<a href="'+url+'"><img src="'+img+'" alt="'+alt+'"></a>' : img;
