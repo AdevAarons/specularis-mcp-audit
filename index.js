@@ -1280,6 +1280,8 @@ const refreshBenchmarks = async () => {
       try {
         const site = normalizeUrl(entry.d);
         if (!site) return null;
+        // Leave headroom for real visitors: the rebuild is never urgent.
+        await new Promise(r => setTimeout(r, 4000));
         const cite = await getCitationSignal(site);
         const r = await scoreSnapshot(site, cite);
         BENCH.progress++;
@@ -1304,10 +1306,15 @@ const refreshBenchmarks = async () => {
   } finally { BENCH.busy = false; }
 };
 
+// Weekly, plus once shortly after boot. Never on a page view.
+setTimeout(() => { refreshBenchmarks().catch(() => {}); }, 20000);
+setInterval(() => { refreshBenchmarks().catch(() => {}); }, 7 * 86400000);
+
 app.get("/api/benchmarks", (_req, res) => {
   try {
-    // Never block the page on a cold cache: kick the refresh off and return what we have.
-    if (!BENCH.rows.length || Date.now() - BENCH.at > 7 * 86400000) refreshBenchmarks().catch(() => {});
+    // Deliberately does NOT trigger a rebuild. The refresh is a scheduled job, and
+    // letting a page view start one meant a visitor's own scan then queued behind
+    // 47 benchmark sites on the same rate-limited API.
     const scores = BENCH.rows.map(r => r.total).sort((a, b) => a - b);
     const med = scores.length ? scores[Math.floor(scores.length / 2)] : null;
     res.set("Cache-Control", "public, max-age=3600");
