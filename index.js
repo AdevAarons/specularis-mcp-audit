@@ -827,12 +827,13 @@ app.post("/api/full-report", async (req, res) => {
         technical: snap.pillars.technical,
       },
     } : null;
-    triggerFullAudit({ name: leadName, email, website_url: site.url, role: role || "Other",
-                       scores: authoritative })
-      .catch(() => {});
+    const auditPayload = { name: leadName, email, website_url: site.url,
+                           role: role || "Other", scores: authoritative };
+    triggerFullAudit(auditPayload).catch(() => {});
 
     if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) {
-      return res.json({ emailed: true, live: false, note: "Full report is on its way by email." });
+      return res.json({ emailed: true, live: false, sentToN8n: auditPayload,
+                        note: "Full report is on its way by email." });
     }
 
     // 2) run the two locked checks live so the page can unlock in place
@@ -848,7 +849,7 @@ app.post("/api/full-report", async (req, res) => {
     const namedInAnswer = answer.toLowerCase().includes(bare.split(".")[0].toLowerCase());
 
     res.json({
-      emailed: true, live: true,
+      emailed: true, live: true, sentToN8n: auditPayload,
       backing: identOk ? {
         sources: ident.total, mentioning: ident.inCount,
         recognised: namedInAnswer,
