@@ -131,13 +131,17 @@ const quickSnapshot = async (site) => {
 // Being cited is the thing that actually predicts AI visibility, so it belongs in
 // the score rather than behind the email gate. It costs two API calls, so cache it
 // hard: a domain's citation footprint does not move hour to hour.
-const CITE_TTL = 7 * 24 * 60 * 60 * 1000;
+const CITE_TTL = 24 * 60 * 60 * 1000;   // a day. Earned citations move in weeks, not hours.
+const CITE_MIN_REFRESH = 15 * 60 * 1000;  // but never let a forced re-check run more than 4x an hour
 const CITE_CACHE = new Map();
 
-const getCitationSignal = async (site) => {
+const getCitationSignal = async (site, force = false) => {
   const bare = site.host.replace(/^www\./, "");
   const hit = CITE_CACHE.get(bare);
-  if (hit && Date.now() - hit.at < CITE_TTL) return hit.v;
+  const age = hit ? Date.now() - hit.at : Infinity;
+  // A forced re-check bypasses the day-long cache but still cannot be spammed.
+  const stale = force ? age > CITE_MIN_REFRESH : age > CITE_TTL;
+  if (hit && !stale) return Object.assign({}, hit.v, { measuredAt: hit.at, fromCache: true });
   if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) return null;
 
   try {
@@ -162,7 +166,7 @@ const getCitationSignal = async (site) => {
       ok: !rec.error || !ident.error,
     };
     CITE_CACHE.set(bare, { at: Date.now(), v });
-    return v;
+    return Object.assign({}, v, { measuredAt: Date.now(), fromCache: false });
   } catch (e) { return null; }
 };
 
@@ -258,6 +262,22 @@ const scoreSnapshot = async (site, cite = null) => {
   const llmsUseful = llmsPresent && /##|when to|use this|about/i.test(llmsText);
   const hasSitemap = sitemap.ok && /<urlset|<sitemapindex/i.test(sitemap.text || "");
   const hasCanonical = /<link[^>]+rel=["']canonical["']/i.test(src);
+
+  // Freshness. Engines lean hard on recently-updated sources, and most sites that
+  // score well on the other pillars turn out to be three years stale. All of this
+  // comes from bytes we already fetched, so it costs nothing.
+  const now = Date.now();
+  const dates = [];
+  const pushDate = (d) => { const t = Date.parse(d); if (Number.isFinite(t) && t <= now + 864e5) dates.push(t); };
+  ((sitemap.text || "").match(/<lastmod>([^<]+)<\/lastmod>/gi) || [])
+    .slice(0, 400).forEach(m => pushDate(m.replace(/<\/?lastmod>/gi, "")));
+  ((src.match(/"(?:datePublished|dateModified)"\s*:\s*"([^"]{8,40})"/gi) || []))
+    .forEach(m => pushDate((m.match(/"([^"]{8,40})"\s*$/) || [])[1] || ""));
+  ((src.match(/<(?:time|meta)[^>]+(?:datetime|content)=["']((?:19|20)\d\d-\d\d-\d\d[^"']*)["']/gi) || []))
+    .forEach(m => pushDate((m.match(/["']((?:19|20)\d\d-\d\d-\d\d[^"']*)["']/) || [])[1] || ""));
+  const newest = dates.length ? Math.max(...dates) : null;
+  const daysSince = newest ? Math.round((now - newest) / 864e5) : null;
+  const sitemapUrls = ((sitemap.text || "").match(/<loc>/gi) || []).length;
   const metaDesc = (src.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{1,400})["']/i) || [])[1] || "";
   const hasMetaDesc = metaDesc.trim().length >= 50;
   const hasTitle = /<title[^>]*>\s*\S[\s\S]{4,}?<\/title>/i.test(src);
@@ -280,51 +300,60 @@ const scoreSnapshot = async (site, cite = null) => {
     }).length;
   }
 
-  // ---- scoring: five pillars of 20, the same shape as the full audit, so the
-  // number a visitor sees here is the number the emailed report confirms. ----
+  // ---- scoring: six weighted pillars summing to 100. Equal weights implied that
+  // a canonical tag matters as much as being cited, which is not true. Off-site
+  // carries the most because it is the only pillar that predicts citation. ----
+  // access 20 · entity 15 · content 15 · off-site 30 · freshness 10 · technical 10
   let pAccess = 20;
   if (starBlocked) pAccess = 0;
   else if (blockedBots.length === botNames.length) pAccess = 2;
   else if (blockedBots.length) pAccess = Math.max(5, 20 - blockedBots.length * 6);
 
-  let pEntity = 0;
-  if (valid > 0) pEntity += 6;
-  if (hasOrg) pEntity += 5;
-  if (hasPerson) pEntity += 3;
+  let pEntity = 0;                                   // out of 15
+  if (valid > 0) pEntity += 4;
+  if (hasOrg) pEntity += 4;
+  if (hasPerson) pEntity += 2;
   if (hasAddress) pEntity += 2;
-  if (verifiedProfiles >= 2) pEntity += 4; else if (verifiedProfiles === 1) pEntity += 2;
+  if (verifiedProfiles >= 2) pEntity += 3; else if (verifiedProfiles === 1) pEntity += 1;
 
-  let pContent = 0;
-  if (botBest >= 1200) pContent += 8; else if (botBest >= 600) pContent += 6;
-  else if (botBest >= 250) pContent += 4; else if (botBest >= 60) pContent += 2;
-  if (answerShaped) pContent += 6;
-  if (headings.length >= 3) pContent += 3;
-  if (!renderGap && botBest >= 250) pContent += 3;
+  let pContent = 0;                                  // out of 15
+  if (botBest >= 1200) pContent += 6; else if (botBest >= 600) pContent += 4;
+  else if (botBest >= 250) pContent += 3; else if (botBest >= 60) pContent += 1;
+  if (answerShaped) pContent += 5;
+  if (headings.length >= 3) pContent += 2;
+  if (!renderGap && botBest >= 250) pContent += 2;
 
   // Off-site is scored on whether the engines actually cite this business, not on
   // whether it links to its own profiles. Unbranded discovery carries most of the
   // weight: that is where new customers come from.
-  let pOffsite = 0;
+  let pOffsite = 0;                                  // out of 30, the heaviest pillar
   let offsiteMeasured = false;
   if (cite && cite.ok) {
     offsiteMeasured = true;
-    pOffsite += Math.min(12, cite.buyerCited * 4);          // cited for a buyer query
-    if (cite.recognised) pOffsite += 3;                      // engine can describe you
-    if (cite.brandMentions > 0) pOffsite += Math.min(3, cite.brandMentions);
-    if (verifiedProfiles >= 2) pOffsite += 2;                // declared identities check out
-    pOffsite = Math.min(20, pOffsite);
+    pOffsite += Math.min(18, cite.buyerCited * 6);           // cited for an unbranded buyer query
+    if (cite.recognised) pOffsite += 5;                       // engines can describe you by name
+    if (cite.brandMentions > 0) pOffsite += Math.min(5, cite.brandMentions * 2);
+    if (verifiedProfiles >= 2) pOffsite += 2;
+    pOffsite = Math.min(30, pOffsite);
   } else {
-    // No engine data: fall back to the weak proxy rather than scoring a zero we
-    // cannot defend, and say so in the response.
-    pOffsite = Math.min(8, verifiedProfiles * 4);
+    pOffsite = Math.min(10, verifiedProfiles * 5);
   }
 
-  let pTechnical = 0;
-  if (hasSitemap) pTechnical += 6;
-  if (hasCanonical) pTechnical += 4;
-  if (hasMetaDesc) pTechnical += 4;
-  if (hasTitle) pTechnical += 3;
-  if (llmsPresent) pTechnical += 2;
+  let pFresh = 0;                                    // out of 10
+  if (daysSince != null) {
+    if (daysSince <= 30) pFresh += 6; else if (daysSince <= 90) pFresh += 5;
+    else if (daysSince <= 180) pFresh += 3; else if (daysSince <= 365) pFresh += 1;
+  }
+  if (sitemapUrls >= 25) pFresh += 2; else if (sitemapUrls >= 8) pFresh += 1;
+  if (dates.length >= 5) pFresh += 2; else if (dates.length >= 1) pFresh += 1;
+  pFresh = Math.min(10, pFresh);
+
+  let pTechnical = 0;                                // out of 10
+  if (hasSitemap) pTechnical += 3;
+  if (hasCanonical) pTechnical += 2;
+  if (hasMetaDesc) pTechnical += 2;
+  if (hasTitle) pTechnical += 1;
+  if (llmsPresent) pTechnical += 1;
   if (llmsUseful) pTechnical += 1;
 
   // Names kept for the three pillars the scan explains on screen.
@@ -336,13 +365,15 @@ const scoreSnapshot = async (site, cite = null) => {
   const inconclusive = !browserOk && allBotsRefused && !starBlocked;
 
   const total = inconclusive ? null
-    : Math.max(0, Math.min(100, Math.round(pAccess + pEntity + pContent + pOffsite + pTechnical)));
+    : Math.max(0, Math.min(100, Math.round(pAccess + pEntity + pContent + pOffsite + pFresh + pTechnical)));
   const grade = inconclusive ? "?" : (total >= 85 ? "A" : total >= 70 ? "B" : total >= 55 ? "C" : total >= 40 ? "D" : "F");
 
   return { host: site.host, total, grade, inconclusive,
     inconclusiveReason: inconclusive ? "This site refused our request no matter who we said we were, including a normal browser. That usually means it blocks datacenter traffic, so we cannot tell what it does with AI crawlers from here." : null,
     access, identity, content,
-    pillars: { access: pAccess, entity: pEntity, content: pContent, offsite: pOffsite, technical: pTechnical },
+    pillars: { access: pAccess, entity: pEntity, content: pContent, offsite: pOffsite, freshness: pFresh, technical: pTechnical },
+    pillarMax: { access: 20, entity: 15, content: 15, offsite: 30, freshness: 10, technical: 10 },
+    daysSinceUpdate: daysSince, datedItems: dates.length, sitemapUrls,
     hasCanonical, hasMetaDesc, hasTitle, answerShaped, questionHeads,
     profilesDeclared: profiles.length, profilesVerified: verifiedProfiles, sameAs: profiles,
     offsiteMeasured, citation: cite || null,
