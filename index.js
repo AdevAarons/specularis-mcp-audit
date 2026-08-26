@@ -348,7 +348,10 @@ const callClaude = async (query) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-opus-5",
+        // Sonnet, not Opus: this is a web-search lookup with a short answer, and
+        // it runs on every scan. Opus here was roughly five times the cost for no
+        // gain in what we actually use, which is the list of cited sources.
+        model: "claude-sonnet-5",
         max_tokens: 1024,
         messages: [{ role: "user", content: query }],
         tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }],
@@ -452,7 +455,8 @@ const inferBuyerQuery = async (site) => {
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-5", max_tokens: 60, messages: [{ role: "user", content: prompt }] }),
+        // Haiku: this returns a single question under 90 characters. Opus was absurd here.
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 60, messages: [{ role: "user", content: prompt }] }),
       });
       if (r.ok) {
         const j = await r.json();
