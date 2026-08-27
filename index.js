@@ -1165,32 +1165,6 @@ const app = express();
 app.set("trust proxy", true); // Railway sits behind a proxy — trust X-Forwarded-For for real client IPs
 app.use(express.json());
 
-// Temporary probe: reproduce the exact body the n8n Claude Score node sends, so we
-// can read Anthropic's real error instead of n8n's generic "Bad request".
-app.get("/api/n8n-probe", async (req, res) => {
-  if (!ANTHROPIC_API_KEY) return res.json({ error: "no anthropic key on this server" });
-  const model = String(req.query.m || "claude-sonnet-4-6");
-  const withTemp = String(req.query.temp || "1") === "1";
-  const mt = parseInt(req.query.mt || "200", 10);
-  // "undefined" reproduces an upstream node failing to produce audit_prompt
-  const content = req.query.undef === "1" ? undefined
-    : req.query.big === "1" ? "x ".repeat(60000) + "\nReply with: ok"
-    : "Reply with the single word: ok";
-  const body = { model, max_tokens: mt, messages: [{ role: "user", content }] };
-  if (withTemp) body.temperature = 0;
-  try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const t = await r.text();
-    let msg = t.slice(0, 220);
-    try { msg = JSON.parse(t).error.message.slice(0, 220); } catch (e) {}
-    res.json({ model, temperature: withTemp, status: r.status, ok: r.ok, message: msg });
-  } catch (e) { res.json({ model, error: String(e).slice(0, 200) }); }
-});
-
 app.get("/", (_req, res) => res.json({
   name: "specularis-ai-visibility-audit",
   status: "ok",
