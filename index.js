@@ -1171,7 +1171,12 @@ app.get("/api/n8n-probe", async (req, res) => {
   if (!ANTHROPIC_API_KEY) return res.json({ error: "no anthropic key on this server" });
   const model = String(req.query.m || "claude-sonnet-4-6");
   const withTemp = String(req.query.temp || "1") === "1";
-  const body = { model, max_tokens: 200, messages: [{ role: "user", content: "Reply with the single word: ok" }] };
+  const mt = parseInt(req.query.mt || "200", 10);
+  // "undefined" reproduces an upstream node failing to produce audit_prompt
+  const content = req.query.undef === "1" ? undefined
+    : req.query.big === "1" ? "x ".repeat(60000) + "\nReply with: ok"
+    : "Reply with the single word: ok";
+  const body = { model, max_tokens: mt, messages: [{ role: "user", content }] };
   if (withTemp) body.temperature = 0;
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
