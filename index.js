@@ -127,6 +127,14 @@ const quickSnapshot = async (site) => {
 };
 
 
+// Can this prospect realistically get INTO a cited source, or is it a rival's own
+// property? That distinction is what turns a competitor list into an action plan.
+// Reuses classifySource below, which already names the source type.
+const isJoinable = (host) => {
+  const t = classifySource("https://" + host);
+  return t !== "Website / blog";
+};
+
 // ---- Deep audit: the comprehensive version, for prospect meetings ----
 // Differs from the free scan in three ways that cost real money and time, which
 // is exactly why it is not on the public page:
@@ -263,7 +271,7 @@ const CITE_TTL = 24 * 60 * 60 * 1000;   // a day. Earned citations move in weeks
 const CITE_MIN_REFRESH = 15 * 60 * 1000;  // but never let a forced re-check run more than 4x an hour
 const CITE_CACHE = new Map();
 
-const buyerQuerySet = async (site) => {
+const buyerQuerySet = async (site, wide = false) => {
   const one = await inferBuyerQuery(site);
   const city = one.city || "";
   // Pull the category out of the model's own question so the three stages stay
@@ -278,16 +286,30 @@ const buyerQuerySet = async (site) => {
   // "a AI visibility company" reads as machine-written, and these questions go to a
   // live engine and appear verbatim in the report someone reads.
   const article = /^[aeiou]/i.test(sing) ? "an" : "a";
-  return [
-    { stage: "decision",      query: ("who are the best " + cat + where).slice(0, 140) },
-    { stage: "consideration", query: ("how do I choose " + article + " " + sing + where).slice(0, 140) },
-    { stage: "awareness",     query: ("what should I look for in " + cat + where).slice(0, 140) },
+  const core = [
+    { stage: "decision",      query: "who are the best " + cat + where },
+    { stage: "consideration", query: "how do I choose " + article + " " + sing + where },
+    { stage: "awareness",     query: "what should I look for in " + cat + where },
   ];
+  if (!wide) return core.map(q => ({ ...q, query: q.query.slice(0, 140) }));
+
+  // Deep audit: ten questions across stage AND phrasing. Three tell you a
+  // direction; ten tell you whether the pattern holds.
+  return [
+    ...core,
+    { stage: "decision",      query: "top " + cat + where + " 2026" },
+    { stage: "decision",      query: "best " + cat + " near me" },
+    { stage: "comparison",    query: "compare " + cat + where },
+    { stage: "comparison",    query: "is it worth hiring " + article + " " + sing },
+    { stage: "problem",       query: "what does " + article + " " + sing + " actually do" },
+    { stage: "problem",       query: "do I need " + article + " " + sing },
+    { stage: "awareness",     query: "who are the best " + cat },   // no city: national view
+  ].map(q => ({ ...q, query: q.query.replace(/\s{2,}/g, " ").slice(0, 140) }));
 };
 
-const getCitationSignal = async (site, force = false, paid = false) => {
+const getCitationSignal = async (site, force = false, paid = false, wide = false) => {
   const bare = site.host.replace(/^www\./, "");
-  const key = bare + (paid ? "|paid" : "|free");
+  const key = bare + (wide ? "|deep" : paid ? "|paid" : "|free");
   const hit = CITE_CACHE.get(key);
   const age = hit ? Date.now() - hit.at : Infinity;
   // A forced re-check bypasses the day-long cache but still cannot be spammed.
@@ -298,7 +320,7 @@ const getCitationSignal = async (site, force = false, paid = false) => {
   try {
     // Only build the question set when we are actually going to ask it. On the free
     // tier this was calling Claude to write three queries that were then discarded.
-    const qset = paid ? await buyerQuerySet(site) : [];
+    const qset = paid ? await buyerQuerySet(site, wide) : [];
     // Sequential, not parallel. Two simultaneous calls to a rate-limited search API
     // means one of them 429s and half the measurement silently comes back empty.
     // The unbranded buyer query goes first because it carries most of the score.
@@ -1517,12 +1539,12 @@ app.get("/api/deep-scan", async (req, res) => {
     const bare = site.host.replace(/^www\./, "");
 
     // 1) the normal five-signal scan, plus a forced-fresh citation read
-    const cite = await getCitationSignal(site, true, true);   // paid: ask the engines directly
+    const cite = await getCitationSignal(site, true, true, true);   // paid + wide: ten questions
     const base = await scoreSnapshot(site, cite);
     if (base.inconclusive) return res.json({ inconclusive: true, host: bare, error: base.inconclusiveReason });
 
     // 2) does the whole site let crawlers in, or only the front door?
-    const urls = await pagesFromSitemap(site, 8);
+    const urls = await pagesFromSitemap(site, 25);   // deep: real coverage, not a spot check
     const pages = [];
     for (const u of urls) { pages.push(await probePage(u)); }   // sequential: polite
     const blockedPages = pages.filter(p => !p.served);
@@ -1539,7 +1561,14 @@ app.get("/api/deep-scan", async (req, res) => {
       freq.set(c.host, (freq.get(c.host) || 0) + 1);
     }));
     const competitors = [...freq.entries()].sort((a, b) => b[1] - a[1])
-      .slice(0, 15).map(([host, n]) => ({ host, citedIn: n, ofQueries: runs.length }));
+      .slice(0, 20).map(([host, n]) => ({
+        host, citedIn: n, ofQueries: runs.length,
+        type: classifySource("https://" + host),
+        joinable: isJoinable(host),
+      }));
+    // The two lists a prospect actually needs: places to get into, and rivals to outrank.
+    const targets = competitors.filter(c => c.joinable);
+    const rivals = competitors.filter(c => !c.joinable);
 
     const citedQueries = runs.filter(r => r.named > 0).length;
 
@@ -1557,7 +1586,13 @@ app.get("/api/deep-scan", async (req, res) => {
         pages,
       },
       citation: { queriesTested: runs.length, queriesWhereCited: citedQueries, runs },
-      competitors,
+      competitors, targets, rivals,
+      byStage: (() => {
+        const g = {};
+        runs.forEach(r => { const k = r.stage || "other";
+          g[k] = g[k] || { tested: 0, cited: 0 }; g[k].tested++; if (r.named > 0) g[k].cited++; });
+        return g;
+      })(),
       freshness: { daysSinceUpdate: base.daysSinceUpdate, datedItems: base.datedItems, sitemapUrls: base.sitemapUrls },
     });
   } catch (e) { res.status(500).json({ error: "deep scan failed: " + String(e).slice(0, 160) }); }
