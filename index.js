@@ -191,6 +191,56 @@ const inferBuyerQueries = async (site) => {
   } catch (e) { return [one.query]; }
 };
 
+// ---- Free corroboration signals ----
+// Everything here is a plain HTTP fetch against a public endpoint: no API keys, no
+// per-call cost. These are the sources answer engines lean on most heavily, so they
+// belong in the off-site pillar alongside the one paid citation query.
+const freeCorroboration = async (site) => {
+  const bare = site.host.replace(/^www\./, "");
+  const brand = bare.split(".")[0].replace(/[^a-z0-9]/gi, "");
+  const pretty = brand.replace(/([a-z])([A-Z])/g, "$1 $2");
+  const out = { wikipedia: false, wikidata: false, news: 0, reddit: 0, newsTitles: [], checked: [] };
+
+  const jget = async (u, ms = 8000) => {
+    const r = await fetchWithTimeout(u, { headers: { "User-Agent": "SpecularisAudit/1.0 (+https://specularisinc.com)" } }, ms);
+    if (!r.ok) return null;
+    try { return JSON.parse(r.text); } catch (e) { return { _raw: r.text }; }
+  };
+
+  await Promise.all([
+    // Wikidata: the entity backbone most engines resolve names against.
+    (async () => {
+      const j = await jget("https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&limit=5&search=" + encodeURIComponent(pretty));
+      const hits = (j && j.search) || [];
+      out.wikidata = hits.some(h => String(h.label || "").toLowerCase().replace(/[^a-z0-9]/g, "").includes(brand.toLowerCase()));
+      out.checked.push("wikidata");
+    })().catch(() => {}),
+    // Wikipedia: a page here is one of the single strongest citation signals there is.
+    (async () => {
+      const j = await jget("https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=5&srsearch=" + encodeURIComponent(pretty));
+      const hits = (j && j.query && j.query.search) || [];
+      out.wikipedia = hits.some(h => String(h.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").includes(brand.toLowerCase()));
+      out.checked.push("wikipedia");
+    })().catch(() => {}),
+    // Press coverage, via the public news feed. Earned media is what engines quote.
+    (async () => {
+      const r = await fetchWithTimeout("https://news.google.com/rss/search?q=" + encodeURIComponent('"' + pretty + '"') + "&hl=en-US&gl=US&ceid=US:en", {}, 9000);
+      const titles = [...String(r.text || "").matchAll(/<title>(?:<!\[CDATA\[)?([^<\]]{6,140})/g)].map(m => m[1]).slice(1, 12);
+      out.newsTitles = titles.filter(t => t.toLowerCase().replace(/[^a-z0-9]/g, "").includes(brand.toLowerCase())).slice(0, 5);
+      out.news = out.newsTitles.length;
+      out.checked.push("news");
+    })().catch(() => {}),
+    // Community mentions. Reddit is disproportionately cited by answer engines.
+    (async () => {
+      const j = await jget("https://www.reddit.com/search.json?limit=15&q=" + encodeURIComponent(pretty));
+      const kids = (j && j.data && j.data.children) || [];
+      out.reddit = kids.filter(k => JSON.stringify(k.data || {}).toLowerCase().includes(bare)).length;
+      out.checked.push("reddit");
+    })().catch(() => {}),
+  ]);
+  return out;
+};
+
 // ---- Off-site corroboration, measured for real ----
 // Being cited is the thing that actually predicts AI visibility, so it belongs in
 // the score rather than behind the email gate. It costs two API calls, so cache it
@@ -213,6 +263,7 @@ const getCitationSignal = async (site, force = false) => {
     // Sequential, not parallel. Two simultaneous calls to a rate-limited search API
     // means one of them 429s and half the measurement silently comes back empty.
     // The unbranded buyer query goes first because it carries most of the score.
+    const free = await freeCorroboration(site);
     const rec = await runCitationFinder(inferred.query, bare);
     await new Promise(r => setTimeout(r, 1500));
     // The branded query only adds recognition context. Skip it entirely when the
@@ -222,6 +273,7 @@ const getCitationSignal = async (site, force = false) => {
       : { total: 0, inCount: 0, answer: "", engines: rec.engines || [], skipped: true };
     const answer = (!ident.error && ident.answer) || "";
     const v = {
+      free,
       query: inferred.query,
       // unbranded: asked for the best in the category, was this business cited?
       buyerSources: rec.error ? 0 : rec.total,
@@ -436,13 +488,28 @@ const scoreSnapshot = async (site, cite = null) => {
     // cites when they do not is the entire game. Brand recognition is reported as
     // context but no longer earns points, so the pillar still reaches 30 without
     // paying for a second query on every scan.
-    pOffsite += Math.min(26, cite.buyerCited * 7);
-    if (verifiedProfiles >= 2) pOffsite += 4; else if (verifiedProfiles === 1) pOffsite += 2;
+    // Ground truth, paid: are you in the sources an engine cites for a buyer query?
+    pOffsite += Math.min(16, cite.buyerCited * 6);
+    // Free corroboration: the sources engines lean on hardest.
+    const fr = cite.free || {};
+    if (fr.wikipedia) pOffsite += 5;                     // strongest single signal there is
+    else if (fr.wikidata) pOffsite += 3;                 // entity resolves, no article yet
+    if (fr.news >= 3) pOffsite += 4; else if (fr.news >= 1) pOffsite += 2;
+    if (fr.reddit >= 3) pOffsite += 2; else if (fr.reddit >= 1) pOffsite += 1;
+    if (verifiedProfiles >= 2) pOffsite += 3; else if (verifiedProfiles === 1) pOffsite += 1;
     pOffsite = Math.min(30, pOffsite);
+  } else if (cite && cite.free && (cite.free.checked || []).length >= 3) {
+    // The paid query failed but the free signals answered. Score what we have and
+    // cap it, rather than pretending we measured the whole pillar.
+    offsiteMeasured = true;
+    const fr = cite.free;
+    if (fr.wikipedia) pOffsite += 5; else if (fr.wikidata) pOffsite += 3;
+    if (fr.news >= 3) pOffsite += 4; else if (fr.news >= 1) pOffsite += 2;
+    if (fr.reddit >= 3) pOffsite += 2; else if (fr.reddit >= 1) pOffsite += 1;
+    if (verifiedProfiles >= 2) pOffsite += 3; else if (verifiedProfiles === 1) pOffsite += 1;
+    pOffsite = Math.min(14, pOffsite);
   } else {
-    // The engines were unreachable. Scoring this pillar anyway would report
-    // "barely cited" when the truth is "we did not look" - the same error as
-    // calling a timeout a block. Leave it unmeasured and score out of 70.
+    // Nothing answered at all. Say so instead of inventing a low score.
     pOffsite = 0;
   }
 
@@ -492,6 +559,7 @@ const scoreSnapshot = async (site, cite = null) => {
     hasCanonical, hasMetaDesc, hasTitle, answerShaped, questionHeads,
     profilesDeclared: profiles.length, profilesVerified: verifiedProfiles, sameAs: profiles,
     offsiteMeasured, citation: cite || null,
+    corroboration: cite && cite.free ? cite.free : null,
     starBlocked, named: blockedBots, botBlocked: blockedBots.length > 0 && browserOk,
     bots, browserWords, words: botBest, renderGap,
     uniq, validSchema: valid, hasOrg, hasPerson, hasAddress,
