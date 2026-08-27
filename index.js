@@ -431,10 +431,13 @@ const scoreSnapshot = async (site, cite = null) => {
   let offsiteMeasured = false;
   if (cite && cite.ok) {
     offsiteMeasured = true;
-    pOffsite += Math.min(18, cite.buyerCited * 6);           // cited for an unbranded buyer query
-    if (cite.recognised) pOffsite += 5;                       // engines can describe you by name
-    if (cite.brandMentions > 0) pOffsite += Math.min(5, cite.brandMentions * 2);
-    if (verifiedProfiles >= 2) pOffsite += 2;
+    // Scored on unbranded discovery alone. Being describable when someone already
+    // knows your name does not win you a customer; being in the sources an engine
+    // cites when they do not is the entire game. Brand recognition is reported as
+    // context but no longer earns points, so the pillar still reaches 30 without
+    // paying for a second query on every scan.
+    pOffsite += Math.min(26, cite.buyerCited * 7);
+    if (verifiedProfiles >= 2) pOffsite += 4; else if (verifiedProfiles === 1) pOffsite += 2;
     pOffsite = Math.min(30, pOffsite);
   } else {
     // The engines were unreachable. Scoring this pillar anyway would report
