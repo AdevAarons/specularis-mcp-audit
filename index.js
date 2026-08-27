@@ -1480,14 +1480,9 @@ app.get("/api/deep-scan", async (req, res) => {
     const blockedPages = pages.filter(p => !p.served);
     const thinPages = pages.filter(p => p.thin);
 
-    // 3) several buyer questions, not one, so the citation picture is stable
-    const queries = await inferBuyerQueries(site);
-    const runs = [];
-    for (const q of queries) {
-      const r = await runCitationFinder(q, bare);
-      if (!r.error) runs.push({ query: q, sources: r.total, named: r.inCount,
-        cited: r.sources.map(x => ({ host: x.host, you: !!x.appearsYou })) });
-    }
+    // 3) reuse the query set the scan already ran and paid for, rather than
+    //    re-querying the same engine for the same answers.
+    const runs = (cite && cite.runs) ? cite.runs.slice() : [];
 
     // 4) who keeps getting cited instead — this is the target list
     const freq = new Map();
