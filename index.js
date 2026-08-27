@@ -215,7 +215,11 @@ const getCitationSignal = async (site, force = false) => {
     // The unbranded buyer query goes first because it carries most of the score.
     const rec = await runCitationFinder(inferred.query, bare);
     await new Promise(r => setTimeout(r, 1500));
-    const ident = await runCitationFinder("What is " + bare + "? Who runs it and what do they do?", bare);
+    // The branded query only adds recognition context. Skip it entirely when the
+    // unbranded one already answered, which halves the cost of every scan.
+    const ident = rec.error
+      ? await runCitationFinder("What is " + bare + "? Who runs it and what do they do?", bare)
+      : { total: 0, inCount: 0, answer: "", engines: rec.engines || [], skipped: true };
     const answer = (!ident.error && ident.answer) || "";
     const v = {
       query: inferred.query,
@@ -728,7 +732,11 @@ const runCitationFinder = async (query, domain) => {
   const site = normalizeUrl(domain);
   const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
   const q = String(query).slice(0, 300);
-  let [pplx, claude] = await Promise.all([callPerplexity(q), callClaude(q)]);
+  // Perplexity first and usually alone: it returns the cited sources, which is all
+  // this function consumes. Claude with web_search costs several times more and was
+  // running on every single call for a second opinion we largely throw away.
+  let pplx = await callPerplexity(q);
+  let claude = null;
   // A 429 is "slow down", not "no". Waiting four seconds beats telling someone
   // their off-site score could not be measured.
   const rateLimited = (x) => x && x.error && /429/.test(String(x.error));
@@ -737,6 +745,11 @@ const runCitationFinder = async (query, domain) => {
     pplx = await callPerplexity(q);
     if (rateLimited(pplx)) { await new Promise(r => setTimeout(r, 8000)); pplx = await callPerplexity(q); }
   }
+  // Only pay for the expensive engine when the cheap one gave us nothing usable.
+  const thin = !pplx || pplx.error ||
+    (!Array.isArray(pplx.search_results) && !Array.isArray(pplx.citations)) ||
+    ((pplx.search_results || pplx.citations || []).length < 3);
+  if (thin && ANTHROPIC_API_KEY) claude = await callClaude(q);
   if ((!pplx || pplx.error) && (!claude || claude.error)) return { error: pplx?.error || claude?.error || "AI query failed" };
 
   const raw = [];
@@ -1308,7 +1321,7 @@ const refreshBenchmarks = async () => {
 
 // Weekly, plus once shortly after boot. Never on a page view.
 setTimeout(() => { refreshBenchmarks().catch(() => {}); }, 20000);
-setInterval(() => { refreshBenchmarks().catch(() => {}); }, 7 * 86400000);
+setInterval(() => { refreshBenchmarks().catch(() => {}); }, 30 * 86400000);  // monthly: a rebuild is ~94 engine calls
 
 app.get("/api/benchmarks", (_req, res) => {
   try {
