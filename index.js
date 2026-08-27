@@ -261,9 +261,12 @@ const buyerQuerySet = async (site) => {
   if (!cat || cat.length < 4) cat = "providers";
   const where = city ? " in " + city : "";
   const sing = cat.replace(/ies$/, "y").replace(/(companies|agencies)$/i, m => m.toLowerCase() === "companies" ? "company" : "agency").replace(/s$/, "");
+  // "a AI visibility company" reads as machine-written, and these questions go to a
+  // live engine and appear verbatim in the report someone reads.
+  const article = /^[aeiou]/i.test(sing) ? "an" : "a";
   return [
     { stage: "decision",      query: ("who are the best " + cat + where).slice(0, 140) },
-    { stage: "consideration", query: ("how do I choose a " + sing + where).slice(0, 140) },
+    { stage: "consideration", query: ("how do I choose " + article + " " + sing + where).slice(0, 140) },
     { stage: "awareness",     query: ("what should I look for in " + cat + where).slice(0, 140) },
   ];
 };
@@ -1169,8 +1172,16 @@ app.get("/api/scan", async (req, res) => {
     r.badge = badgeUrl(site.host.replace(/^www\./, ""), r.total, r.grade);
     // Pillars 4 and 5 are scored in the open but explained only after an email.
     // Strip the working: which query, which sources, what is missing technically.
+    // Scores are public. The evidence behind them is what the email buys: the
+    // buyer questions we asked, who got cited instead, the press and community
+    // signals, and which pages we probed.
     delete r.citation;
+    delete r.corroboration;
     delete r.sameAs;
+    delete r.deepPages;
+    delete r.datedItems;
+    delete r.sitemapUrls;
+    delete r.daysSinceUpdate;
     r.locked = {
       offsite: { measured: !!r.offsiteMeasured, score: r.pillars.offsite },
       technical: { score: r.pillars.technical },
@@ -1244,6 +1255,23 @@ app.post("/api/full-report", async (req, res) => {
         query: c.query, sources: c.buyerSources, named: c.buyerCited,
         engines: c.engines, cited: c.cited.slice(0, 6)
       } : null,
+      // the free corroboration signals behind the off-site score
+      corroboration: c && c.free ? c.free : null,
+      // every buyer question we asked and what came back
+      queries: c && c.runs ? c.runs.map(r => ({ stage: r.stage, query: r.query,
+        sources: r.sources, named: r.named, cited: (r.cited || []).slice(0, 6) })) : [],
+      // who keeps getting cited instead, across the whole set
+      competitors: c && c.runs ? (() => {
+        const f = new Map();
+        c.runs.forEach(run => (run.cited || []).forEach(x => {
+          if (x.you) return; f.set(x.host, (f.get(x.host) || 0) + 1);
+        }));
+        return [...f.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
+          .map(([host, n]) => ({ host, citedIn: n, ofQueries: c.runs.length }));
+      })() : [],
+      freshness: snap ? { daysSinceUpdate: snap.daysSinceUpdate, datedItems: snap.datedItems,
+                          sitemapUrls: snap.sitemapUrls } : null,
+      pages: snap && snap.deepPages ? snap.deepPages : [],
       // pillar 5's working, so the page can explain the technical score too
       technical: snap ? {
         score: snap.pillars.technical,
