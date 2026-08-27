@@ -249,6 +249,25 @@ const CITE_TTL = 24 * 60 * 60 * 1000;   // a day. Earned citations move in weeks
 const CITE_MIN_REFRESH = 15 * 60 * 1000;  // but never let a forced re-check run more than 4x an hour
 const CITE_CACHE = new Map();
 
+const buyerQuerySet = async (site) => {
+  const one = await inferBuyerQuery(site);
+  const city = one.city || "";
+  // Pull the category out of the model's own question so the three stages stay
+  // about the same business, not three unrelated searches.
+  let cat = String(one.query || "")
+    .replace(/^(who are|what are|which are|who is|what is)\s+(the\s+)?(best|top|leading)?\s*/i, "")
+    .replace(new RegExp("\\s+in\\s+" + city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*$", "i"), "")
+    .replace(/\?+$/, "").trim();
+  if (!cat || cat.length < 4) cat = "providers";
+  const where = city ? " in " + city : "";
+  const sing = cat.replace(/ies$/, "y").replace(/(companies|agencies)$/i, m => m.toLowerCase() === "companies" ? "company" : "agency").replace(/s$/, "");
+  return [
+    { stage: "decision",      query: ("who are the best " + cat + where).slice(0, 140) },
+    { stage: "consideration", query: ("how do I choose a " + sing + where).slice(0, 140) },
+    { stage: "awareness",     query: ("what should I look for in " + cat + where).slice(0, 140) },
+  ];
+};
+
 const getCitationSignal = async (site, force = false) => {
   const bare = site.host.replace(/^www\./, "");
   const hit = CITE_CACHE.get(bare);
@@ -259,22 +278,33 @@ const getCitationSignal = async (site, force = false) => {
   if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) return null;
 
   try {
-    const inferred = await inferBuyerQuery(site);
+    const qset = await buyerQuerySet(site);
     // Sequential, not parallel. Two simultaneous calls to a rate-limited search API
     // means one of them 429s and half the measurement silently comes back empty.
     // The unbranded buyer query goes first because it carries most of the score.
     const free = await freeCorroboration(site);
-    const rec = await runCitationFinder(inferred.query, bare);
-    await new Promise(r => setTimeout(r, 1500));
-    // The branded query only adds recognition context. Skip it entirely when the
-    // unbranded one already answered, which halves the cost of every scan.
-    const ident = rec.error
-      ? await runCitationFinder("What is " + bare + "? Who runs it and what do they do?", bare)
-      : { total: 0, inCount: 0, answer: "", engines: rec.engines || [], skipped: true };
+    // Three buyer questions across intent stages. One query is a coin flip: a
+    // business can own the decision-stage answer and be invisible at awareness.
+    // Sequential with a gap, because the search API rate-limits parallel calls.
+    const runs = [];
+    for (const q of qset) {
+      const r = await runCitationFinder(q.query, bare);
+      if (!r.error) runs.push({ stage: q.stage, query: q.query, sources: r.total, named: r.inCount,
+        cited: r.sources.slice(0, 8).map(x => ({ host: x.host, you: !!x.appearsYou })) });
+      await new Promise(z => setTimeout(z, 1500));
+    }
+    const rec = runs.length
+      ? { total: runs.reduce((a, x) => a + x.sources, 0), inCount: runs.reduce((a, x) => a + x.named, 0),
+          sources: runs[0].cited.map(c => ({ host: c.host, appearsYou: c.you })), engines: ["Perplexity"], error: null }
+      : { error: "all queries failed", total: 0, inCount: 0, sources: [], engines: [] };
+    const ident = { total: 0, inCount: 0, answer: "", engines: [], skipped: true };
     const answer = (!ident.error && ident.answer) || "";
     const v = {
       free,
-      query: inferred.query,
+      runs,
+      queriesRun: runs.length,
+      queriesCited: runs.filter(r => r.named > 0).length,
+      query: (qset[0] && qset[0].query) || "",
       // unbranded: asked for the best in the category, was this business cited?
       buyerSources: rec.error ? 0 : rec.total,
       buyerCited: rec.error ? 0 : rec.inCount,
@@ -488,8 +518,12 @@ const scoreSnapshot = async (site, cite = null) => {
     // cites when they do not is the entire game. Brand recognition is reported as
     // context but no longer earns points, so the pillar still reaches 30 without
     // paying for a second query on every scan.
-    // Ground truth, paid: are you in the sources an engine cites for a buyer query?
-    pOffsite += Math.min(16, cite.buyerCited * 6);
+    // Ground truth: across three buyer questions, how many did you show up for?
+    // Coverage is the honest reading - being cited twice in one answer is weaker
+    // than appearing once in each of three different buyer moments.
+    const ran = cite.queriesRun || 0, hit = cite.queriesCited || 0;
+    if (ran > 0) pOffsite += Math.round(16 * (hit / ran));
+    else pOffsite += Math.min(16, (cite.buyerCited || 0) * 6);
     // Free corroboration: the sources engines lean on hardest.
     const fr = cite.free || {};
     if (fr.wikipedia) pOffsite += 5;                     // strongest single signal there is
