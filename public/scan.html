@@ -425,7 +425,7 @@ function render(j){
   ];
   const P2 = j.pillars || {};
   const M2 = j.pillarMax || {};
-  checks.push({
+  const freshnessRow = ({
     q:'Does the site look alive?',
     v: j.daysSinceUpdate == null ? 'undated' : (j.daysSinceUpdate <= 90 ? 'recent' : j.daysSinceUpdate + ' days'),
     bad: j.daysSinceUpdate == null || j.daysSinceUpdate > 365,
@@ -435,6 +435,8 @@ function render(j){
                       : 'Nothing on the site carries a date, so an engine cannot tell if it was updated last week or three years ago.'
   });
   const off = [
+    ['fresh','Does the site look alive?', (P2.freshness||0)+'/'+(M2.freshness||10),
+     'Whether anything here is dated and recent. Engines lean on sources they can tell are maintained. Unlock to see how stale it looks and what carries a date.'],
     ['backing','Does anyone else back you up?',
      j.offsiteMeasured === false ? 'not measured' : (P2.offsite||0)+'/'+(M2.offsite||30),
      j.offsiteMeasured
@@ -578,7 +580,8 @@ async function sendFull(e){
   sent.style.display='block';
   sent.textContent='Opening up the last two pillars and building your report.';
   lens('goal');
-  setRow('backing','opening…','Pulling the buyer question and the sources the engines cited.');
+  setRow('fresh','opening…','Reading the dates across your sitemap and pages.');
+  setRow('backing','opening…','Pulling the buyer questions and the sources the engines cited.');
   setRow('tech','opening…','Listing which pieces of plumbing are missing.');
   try{
     const r = await fetch('/api/full-report',{method:'POST',headers:{'Content-Type':'application/json'},
