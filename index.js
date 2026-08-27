@@ -196,11 +196,16 @@ const probePage = async (url) => {
   const words = (t) => (String(t || "").replace(/<[^>]+>/g, " ").match(/\S+/g) || []).length;
   const bw = words(asBrowser.text), gw = words(asBot.text);
   const challenged = CHALLENGE_RX.test(asBot.text || "");
+  const browserOk = asBrowser.ok && bw > 40;
   return {
     url,
     browser: { status: asBrowser.status, words: bw },
     gptbot: { status: asBot.status, words: gw, challenged },
     served: asBot.ok && !challenged && gw > 40,
+    // The whole point of fetching twice: a page is only "blocked" when a person
+    // gets in and the crawler does not. A 404 to both is a dead link, not a block.
+    refused: browserOk && (!asBot.ok || challenged || gw <= 40),
+    dead: !browserOk && !asBot.ok,
     thin: asBrowser.ok && bw > 300 && gw < bw * 0.4,
   };
 };
@@ -516,7 +521,9 @@ const scoreSnapshot = async (site, cite = null) => {
         if (r.status === 0) r = await get(25000);
         const w = (String(r.text || "").replace(/<[^>]+>/g, " ").match(/\S+/g) || []).length;
         const challenged = CHALLENGE_RX.test(r.text || "");
-        const refused = [401, 403, 404, 410, 429, 451].includes(r.status) || challenged;
+        // 404/410 mean the page is gone, which is a sitemap hygiene problem, not an
+        // AI block. Only an access refusal counts against the crawler-access pillar.
+        const refused = [401, 403, 429, 451].includes(r.status) || challenged;
         const unknown = r.status === 0;
         return { url: u, status: r.status, words: w,
                  served: r.ok && !challenged && w > 40, refused, unknown };
@@ -1589,7 +1596,8 @@ app.get("/api/deep-scan", async (req, res) => {
     const urls = await pagesFromSitemap(site, 25);   // deep: real coverage, not a spot check
     const pages = [];
     for (const u of urls) { pages.push(await probePage(u)); }   // sequential: polite
-    const blockedPages = pages.filter(p => !p.served);
+    const blockedPages = pages.filter(p => p.refused);
+    const deadPages = pages.filter(p => p.dead);
     const thinPages = pages.filter(p => p.thin);
 
     // 3) reuse the query set the scan already ran and paid for, rather than
@@ -1623,8 +1631,10 @@ app.get("/api/deep-scan", async (req, res) => {
       siteWide: {
         pagesTested: pages.length,
         pagesBlocked: blockedPages.length,
+        pagesDead: deadPages.length,
         pagesThin: thinPages.length,
         homepageOnlyWouldHaveMissed: blockedPages.length > 0 && pages[0] && pages[0].served,
+        deadUrls: deadPages.map(p => p.url).slice(0, 10),
         pages,
       },
       citation: { queriesTested: runs.length, queriesWhereCited: citedQueries, runs },
