@@ -160,6 +160,26 @@
     color:var(--blue); cursor:pointer; }
   .benchnote{ font-size:12.5px; color:var(--soft); margin-top:18px; max-width:62ch; line-height:1.6; }
 
+  /* Phones. The results ran to ~2900px, and the leaderboard plus the check rows
+     were 58% of it. Tighten the rows and let the table stay folded until asked for. */
+  @media (max-width:640px){
+    .ck{ padding:15px 0; }
+    .why{ margin-top:7px; }
+    .facts{ margin-top:7px; }
+    .lens{ margin-top:30px; }
+    .rest{ margin-top:32px; padding-top:20px; }
+    .rest p{ margin:8px 0 16px; }
+    .mark{ margin-top:30px; padding-top:18px; }
+    .bench{ margin-top:34px; padding-top:20px; }
+    .bench .cap{ font-size:12.5px; }
+    .cats{ display:none; }                 /* filtering is a desktop affordance */
+    .benchnote{ font-size:12px; margin-top:14px; }
+    .bench.folded #benchrow,
+    .bench.folded #benchnote,
+    .bench.folded .cap{ display:none; }
+    .bench.folded .more{ padding-top:6px; }
+  }
+
   /* Embedded on specularisinc.com/free-audit. The page around us supplies the
      headline and the explanatory copy as real text, so we drop ours: crawlers
      cannot read inside this frame, and that copy needs to live in the page HTML. */
@@ -263,7 +283,7 @@
 </div>
 
 <script>
-let LAST = null, BENCH = null, ALL = [], CAT = 'All', EXPANDED = false;
+let LAST = null, BENCH = null, ALL = [], CAT = 'All', EXPANDED = false, FOLDED = false;
 
 // ---- embed mode: /scan?embed=1 inside an iframe on specularisinc.com ----
 const EMBED = new URLSearchParams(location.search).get('embed') === '1';
@@ -530,6 +550,9 @@ function renderBench(j){
   if(b.skipped) note.push(b.skipped+' more well-known sites refused our request no matter who we said we were, including a plain browser. We left them off rather than score them a zero we could not stand behind.');
   document.getElementById('benchnote').textContent = note.join(' ');
 
+  // On a phone the table is ~800px of scroll before anyone has asked for it.
+  // Fold it behind one line; the same control that expands it also unfolds.
+  FOLDED = window.matchMedia('(max-width:640px)').matches;
   paint();
   document.getElementById('bench').style.display='block';
   postHeight();
@@ -539,11 +562,19 @@ function setCat(c){ CAT=c; EXPANDED=false;
   document.querySelectorAll('#cats button').forEach(b=>b.classList.toggle('on', b.textContent===c));
   paint();
 }
-function toggleMore(){ EXPANDED=!EXPANDED; paint(); }
+function toggleMore(){
+  if (FOLDED) { FOLDED = false; }          // first tap on a phone opens the table
+  else { EXPANDED = !EXPANDED; }
+  paint();
+}
 
 function paint(){
+  const bench = document.getElementById('bench');
+  bench.classList.toggle('folded', FOLDED);
   const list = CAT==='All' ? ALL : ALL.filter(x=>x.cat===CAT || x.you);
-  const shown = EXPANDED ? list : list.slice(0,12);
+  const phone = window.matchMedia('(max-width:640px)').matches;
+  const cap = phone ? 6 : 12;              // fewer rows before the fold on a phone
+  const shown = EXPANDED ? list : list.slice(0, cap);
   document.getElementById('benchrow').innerHTML = shown.map(x =>
     '<span class="b'+(x.you?' you':(x.us?' us':''))+'">'+
     '<span class="n">'+x.rank+'</span>'+
@@ -552,9 +583,16 @@ function paint(){
     '<span class="s" style="color:'+col(x.total)+'">'+x.total+'</span></span>').join('');
   postHeight();
   const more = document.getElementById('more');
-  if(list.length>12){ more.style.display='block';
-    more.textContent = EXPANDED ? 'Show fewer' : 'Show all '+list.length; }
-  else more.style.display='none';
+  if (FOLDED) {
+    more.style.display='block';
+    const me = ALL.find(x=>x.you);
+    more.textContent = me
+      ? 'See where you rank against ' + (ALL.length-1) + ' known sites \u2192'
+      : 'See how ' + ALL.length + ' known sites score \u2192';
+  } else if (list.length > cap) {
+    more.style.display='block';
+    more.textContent = EXPANDED ? 'Show fewer' : 'Show all '+list.length;
+  } else more.style.display='none';
 }
 
 function cp(btn, kind){
