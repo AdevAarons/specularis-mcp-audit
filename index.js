@@ -66,6 +66,8 @@ const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || ""; // set in Railw
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || ""; // set in Railway Variables — adds Claude as a 2nd engine in the citation finder
 const NOTION_TOKEN = process.env.NOTION_TOKEN || "";       // Notion internal-integration token — logs finder leads
 const NOTION_LEADS_DB = process.env.NOTION_LEADS_DB || ""; // Notion database id that receives finder leads
+// Deep-audit baselines: one row per run so a signed score can be compared later.
+const NOTION_AUDITS_DB = process.env.NOTION_AUDITS_DB || "98fb5088-506c-43a7-a2d3-ad0114b72216";
 // finder rate limits (cost guard for the public tool)
 const FINDER_IP_MAX = Number(process.env.FINDER_IP_MAX || 6);                    // requests per IP per window
 const FINDER_IP_WINDOW_MS = Number(process.env.FINDER_IP_WINDOW_MS || 15 * 60 * 1000); // 15 min
@@ -133,6 +135,44 @@ const quickSnapshot = async (site) => {
 const isJoinable = (host) => {
   const t = classifySource("https://" + host);
   return t !== "Website / blog";
+};
+
+// Persist a deep audit as a baseline. Railway's disk resets on deploy, so a
+// benchmark someone signed against has to live somewhere real.
+const saveDeepBaseline = async (r) => {
+  if (!NOTION_TOKEN || !NOTION_AUDITS_DB) return { saved: false, reason: "notion not configured" };
+  const txt = (v) => [{ text: { content: String(v == null ? "" : v).slice(0, 1900) } }];
+  const num = (v) => (typeof v === "number" ? v : null);
+  const list = (arr) => (arr || []).slice(0, 12).map(x => x.host + " (" + x.citedIn + "/" + x.ofQueries + ")").join(", ");
+  try {
+    const res = await fetchWithTimeout("https://api.notion.com/v1/pages", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + NOTION_TOKEN, "Notion-Version": "2022-06-28", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parent: { database_id: NOTION_AUDITS_DB },
+        properties: {
+          "Domain": { title: txt(r.host) },
+          "Run date": { date: { start: String(r.measuredAt || new Date().toISOString()).slice(0, 10) } },
+          "Total": { number: num(r.total) },
+          "Grade": { select: { name: String(r.grade || "?") } },
+          "Off-site": { number: num(r.pillars && r.pillars.offsite) },
+          "Access": { number: num(r.pillars && r.pillars.access) },
+          "Entity": { number: num(r.pillars && r.pillars.entity) },
+          "Content": { number: num(r.pillars && r.pillars.content) },
+          "Freshness": { number: num(r.pillars && r.pillars.freshness) },
+          "Technical": { number: num(r.pillars && r.pillars.technical) },
+          "Queries cited": { rich_text: txt((r.citation && r.citation.queriesWhereCited) + " of " + (r.citation && r.citation.queriesTested)) },
+          "Pages tested": { number: num(r.siteWide && r.siteWide.pagesTested) },
+          "Pages refused": { number: num(r.siteWide && r.siteWide.pagesBlocked) },
+          "Rivals": { rich_text: txt(list(r.rivals)) },
+          "Targets": { rich_text: txt(list(r.targets) || "none - every cited source is a rival's own domain") },
+          "Scanned from": { select: { name: r.proxy === "residential" ? "residential" : "datacenter" } },
+        },
+      }),
+    }, 15000);
+    if (!res.ok) return { saved: false, reason: "notion " + res.status + " - is the integration shared with the database?" };
+    return { saved: true };
+  } catch (e) { return { saved: false, reason: String(e).slice(0, 120) }; }
 };
 
 // ---- Deep audit: the comprehensive version, for prospect meetings ----
@@ -1572,7 +1612,7 @@ app.get("/api/deep-scan", async (req, res) => {
 
     const citedQueries = runs.filter(r => r.named > 0).length;
 
-    res.json({
+    const payload = {
       host: bare,
       measuredAt: new Date().toISOString(),
       proxy: PROXY_URL ? "residential" : "datacenter",
@@ -1594,7 +1634,11 @@ app.get("/api/deep-scan", async (req, res) => {
         return g;
       })(),
       freshness: { daysSinceUpdate: base.daysSinceUpdate, datedItems: base.datedItems, sitemapUrls: base.sitemapUrls },
-    });
+    };
+    payload.baseline = String(req.query.save || "1") === "0"
+      ? { saved: false, reason: "skipped" }
+      : await saveDeepBaseline(payload);
+    res.json(payload);
   } catch (e) { res.status(500).json({ error: "deep scan failed: " + String(e).slice(0, 160) }); }
 });
 
