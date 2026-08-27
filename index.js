@@ -296,7 +296,9 @@ const getCitationSignal = async (site, force = false, paid = false) => {
   if (paid && !PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) return null;
 
   try {
-    const qset = await buyerQuerySet(site);
+    // Only build the question set when we are actually going to ask it. On the free
+    // tier this was calling Claude to write three queries that were then discarded.
+    const qset = paid ? await buyerQuerySet(site) : [];
     // Sequential, not parallel. Two simultaneous calls to a rate-limited search API
     // means one of them 429s and half the measurement silently comes back empty.
     // The unbranded buyer query goes first because it carries most of the score.
@@ -322,7 +324,7 @@ const getCitationSignal = async (site, force = false, paid = false) => {
       runs,
       queriesRun: runs.length,
       queriesCited: runs.filter(r => r.named > 0).length,
-      query: (qset[0] && qset[0].query) || "",
+      query: (qset[0] && qset[0].query) || null,
       // unbranded: asked for the best in the category, was this business cited?
       buyerSources: rec.error ? 0 : rec.total,
       buyerCited: rec.error ? 0 : rec.inCount,
