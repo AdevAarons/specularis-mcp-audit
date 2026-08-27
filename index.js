@@ -1179,6 +1179,11 @@ app.get("/", (_req, res) => res.json({
   // Whether the badge signing key is a real one or the public fallback baked into
   // the repo. A boolean only — never the value, and never a hash of it.
   badgeSecretSet: BADGE_SECRET !== "specularis-badge-dev-secret",
+  // Booleans only - never the values. Tells us whether a variable reached the
+  // running process, which is the thing Railway's UI cannot confirm.
+  notionTokenSet: !!NOTION_TOKEN,
+  notionAuditsDbSet: !!NOTION_AUDITS_DB,
+  deepKeySet: !!DEEP_KEY,
 }));
 
 
