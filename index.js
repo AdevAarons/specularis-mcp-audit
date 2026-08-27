@@ -199,7 +199,8 @@ const freeCorroboration = async (site) => {
   const bare = site.host.replace(/^www\./, "");
   const brand = bare.split(".")[0].replace(/[^a-z0-9]/gi, "");
   const pretty = brand.replace(/([a-z])([A-Z])/g, "$1 $2");
-  const out = { wikipedia: false, wikidata: false, news: 0, reddit: 0, newsTitles: [], checked: [] };
+  const out = { wikipedia: false, wikidata: false, wikiLinks: 0, news: 0, reddit: 0, hn: 0,
+                newsTitles: [], checked: [] };
 
   const jget = async (u, ms = 8000) => {
     const r = await fetchWithTimeout(u, { headers: { "User-Agent": "SpecularisAudit/1.0 (+https://specularisinc.com)" } }, ms);
@@ -208,6 +209,19 @@ const freeCorroboration = async (site) => {
   };
 
   await Promise.all([
+    // Does any Wikipedia article link out to this domain? A real editorial citation,
+    // and among the strongest corroboration signals that exists.
+    (async () => {
+      const j = await jget("https://en.wikipedia.org/w/api.php?action=query&list=exturlusage&format=json&eulimit=10&euquery=" + encodeURIComponent(bare));
+      out.wikiLinks = ((j && j.query && j.query.exturlusage) || []).length;
+      out.checked.push("wikilinks");
+    })().catch(() => {}),
+    // Hacker News, via the public Algolia index. No key, and a source engines quote.
+    (async () => {
+      const j = await jget("https://hn.algolia.com/api/v1/search?hitsPerPage=20&query=" + encodeURIComponent(bare));
+      out.hn = ((j && j.hits) || []).filter(h => JSON.stringify(h).toLowerCase().includes(bare)).length;
+      out.checked.push("hn");
+    })().catch(() => {}),
     // Wikidata: the entity backbone most engines resolve names against.
     (async () => {
       const j = await jget("https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&limit=5&search=" + encodeURIComponent(pretty));
@@ -271,14 +285,15 @@ const buyerQuerySet = async (site) => {
   ];
 };
 
-const getCitationSignal = async (site, force = false) => {
+const getCitationSignal = async (site, force = false, paid = false) => {
   const bare = site.host.replace(/^www\./, "");
-  const hit = CITE_CACHE.get(bare);
+  const key = bare + (paid ? "|paid" : "|free");
+  const hit = CITE_CACHE.get(key);
   const age = hit ? Date.now() - hit.at : Infinity;
   // A forced re-check bypasses the day-long cache but still cannot be spammed.
   const stale = force ? age > CITE_MIN_REFRESH : age > CITE_TTL;
   if (hit && !stale) return Object.assign({}, hit.v, { measuredAt: hit.at, fromCache: true });
-  if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) return null;
+  if (paid && !PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) return null;
 
   try {
     const qset = await buyerQuerySet(site);
@@ -286,11 +301,11 @@ const getCitationSignal = async (site, force = false) => {
     // means one of them 429s and half the measurement silently comes back empty.
     // The unbranded buyer query goes first because it carries most of the score.
     const free = await freeCorroboration(site);
-    // Three buyer questions across intent stages. One query is a coin flip: a
-    // business can own the decision-stage answer and be invisible at awareness.
-    // Sequential with a gap, because the search API rate-limits parallel calls.
+    // The free tier costs nothing to run: no API keys, no per-scan billing. Asking
+    // the engines directly is the better measurement, but it is a paid call, so it
+    // belongs to the deep audit that a booked prospect gets.
     const runs = [];
-    for (const q of qset) {
+    for (const q of (paid ? qset : [])) {
       const r = await runCitationFinder(q.query, bare);
       if (!r.error) runs.push({ stage: q.stage, query: q.query, sources: r.total, named: r.inCount,
         cited: r.sources.slice(0, 8).map(x => ({ host: x.host, you: !!x.appearsYou })) });
@@ -320,7 +335,7 @@ const getCitationSignal = async (site, force = false) => {
       engines: [...new Set([...(ident.engines || []), ...(rec.engines || [])])],
       ok: !rec.error || !ident.error,
     };
-    CITE_CACHE.set(bare, { at: Date.now(), v });
+    CITE_CACHE.set(key, { at: Date.now(), v });
     return Object.assign({}, v, { measuredAt: Date.now(), fromCache: false });
   } catch (e) { return null; }
 };
@@ -521,19 +536,22 @@ const scoreSnapshot = async (site, cite = null) => {
     // cites when they do not is the entire game. Brand recognition is reported as
     // context but no longer earns points, so the pillar still reaches 30 without
     // paying for a second query on every scan.
-    // Ground truth: across three buyer questions, how many did you show up for?
-    // Coverage is the honest reading - being cited twice in one answer is weaker
-    // than appearing once in each of three different buyer moments.
-    const ran = cite.queriesRun || 0, hit = cite.queriesCited || 0;
-    if (ran > 0) pOffsite += Math.round(16 * (hit / ran));
-    else pOffsite += Math.min(16, (cite.buyerCited || 0) * 6);
-    // Free corroboration: the sources engines lean on hardest.
     const fr = cite.free || {};
-    if (fr.wikipedia) pOffsite += 5;                     // strongest single signal there is
-    else if (fr.wikidata) pOffsite += 3;                 // entity resolves, no article yet
-    if (fr.news >= 3) pOffsite += 4; else if (fr.news >= 1) pOffsite += 2;
-    if (fr.reddit >= 3) pOffsite += 2; else if (fr.reddit >= 1) pOffsite += 1;
-    if (verifiedProfiles >= 2) pOffsite += 3; else if (verifiedProfiles === 1) pOffsite += 1;
+    // Free evidence, worth up to 30 on its own so the free tier is a real score
+    // rather than a teaser: these are the sources answer engines lean on hardest.
+    if (fr.wikipedia) pOffsite += 8;                      // an article is the strongest signal there is
+    else if (fr.wikidata) pOffsite += 4;                  // entity resolves, no article yet
+    if (fr.wikiLinks >= 3) pOffsite += 5; else if (fr.wikiLinks >= 1) pOffsite += 3;
+    if (fr.news >= 3) pOffsite += 6; else if (fr.news >= 1) pOffsite += 3;
+    if (fr.reddit >= 3) pOffsite += 4; else if (fr.reddit >= 1) pOffsite += 2;
+    if (fr.hn >= 2) pOffsite += 2; else if (fr.hn >= 1) pOffsite += 1;
+    if (verifiedProfiles >= 2) pOffsite += 5; else if (verifiedProfiles === 1) pOffsite += 2;
+
+    // Paid ground truth, only present on the deep audit: asking the engines directly
+    // beats every proxy, so when we have it, it replaces half the free estimate.
+    const ran = cite.queriesRun || 0, hit = cite.queriesCited || 0;
+    if (ran > 0) pOffsite = Math.round(pOffsite * 0.5) + Math.round(15 * (hit / ran));
+
     pOffsite = Math.min(30, pOffsite);
   } else if (cite && cite.free && (cite.free.checked || []).length >= 3) {
     // The paid query failed but the free signals answered. Score what we have and
@@ -1497,7 +1515,7 @@ app.get("/api/deep-scan", async (req, res) => {
     const bare = site.host.replace(/^www\./, "");
 
     // 1) the normal five-signal scan, plus a forced-fresh citation read
-    const cite = await getCitationSignal(site, true);
+    const cite = await getCitationSignal(site, true, true);   // paid: ask the engines directly
     const base = await scoreSnapshot(site, cite);
     if (base.inconclusive) return res.json({ inconclusive: true, host: bare, error: base.inconclusiveReason });
 
