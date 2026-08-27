@@ -36,6 +36,8 @@ let STATS_BAR_HTML = "";
 try { STATS_BAR_HTML = readFileSync(join(__dirname, "public", "stats-bar.html"), "utf8"); } catch (e) {}
 let DASHBOARD_HTML = "";
 try { DASHBOARD_HTML = readFileSync(join(__dirname, "public", "dashboard.html"), "utf8"); } catch (e) {}
+let DEEP_HTML = "";
+try { DEEP_HTML = readFileSync(join(__dirname, "public", "deep.html"), "utf8"); } catch (e) {}
 let WHAT_WE_DO_HTML = "";
 try { WHAT_WE_DO_HTML = readFileSync(join(__dirname, "public", "what-we-do.html"), "utf8"); } catch (e) {}
 let SCHEMA_V3_TXT = "";
@@ -1640,6 +1642,14 @@ app.get("/api/deep-scan", async (req, res) => {
       : await saveDeepBaseline(payload);
     res.json(payload);
   } catch (e) { res.status(500).json({ error: "deep scan failed: " + String(e).slice(0, 160) }); }
+});
+
+// Private deep-audit page. Key-gated, noindex, meant to be opened in a prospect
+// meeting or sent to someone who has booked one.
+app.get("/deep", (req, res) => {
+  if (DEEP_KEY && req.query.k !== DEEP_KEY) return res.status(401).send("Unauthorized");
+  if (!DEEP_HTML) return res.status(404).send("Not found");
+  res.set("X-Robots-Tag", "noindex, nofollow").type("html").send(DEEP_HTML);
 });
 
 // Internal client results dashboard — password-gated via ?k= or DASHBOARD_KEY env

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Deep AI Visibility Audit — Specularis</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+<style>
+  :root{ --blue:#79a0ff; --ink:#f4f5f7; --mid:#a6adb6; --soft:#7c838c; --rule:#24262d;
+         --bg:#0a0a0f; --fail:#e8705c; --warn:#e0a94a; --good:#57c98a; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--bg); color:var(--ink); line-height:1.5;
+    font-family:Satoshi,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:860px; margin:0 auto; padding:56px 24px 90px; }
+  .m{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; letter-spacing:.02em; }
+  h1{ font-size:clamp(26px,4vw,36px); font-weight:700; letter-spacing:-.035em; line-height:1.1; }
+  .sub{ color:var(--mid); font-size:16px; margin-top:12px; max-width:58ch; }
+  form{ display:flex; gap:0; margin:30px 0 0; border-bottom:1.5px solid var(--ink); max-width:520px; }
+  form input{ flex:1; font:inherit; font-size:17px; padding:10px 2px; border:0; background:none; outline:none;
+    color:var(--ink); -webkit-text-fill-color:var(--ink); caret-color:var(--blue); }
+  form input::placeholder{ color:#5d646d; }
+  form button{ font:inherit; font-size:14px; font-weight:700; padding:10px 0 10px 18px; border:0;
+    background:none; color:var(--blue); cursor:pointer; }
+  form button:disabled{ color:var(--soft); cursor:default; }
+  .note{ font-size:13px; color:var(--soft); margin-top:12px; }
+  .prog{ display:none; margin-top:26px; font-size:14px; color:var(--mid); }
+  .prog b{ color:var(--ink); font-weight:600; }
+  #out{ display:none; margin-top:52px; }
+  .err{ display:none; margin-top:22px; color:var(--fail); font-size:15px; max-width:60ch; }
+
+  .score{ display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  .score b{ font-size:76px; font-weight:700; letter-spacing:-.055em; line-height:.95; font-variant-numeric:tabular-nums; }
+  .score .of{ font-size:16px; color:var(--soft); }
+  .meta{ font-size:13px; color:var(--soft); margin-top:14px; }
+
+  h2{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--soft);
+      font-weight:700; margin:46px 0 14px; }
+  .lay{ padding:14px 0; border-bottom:1px solid var(--rule); }
+  .layhead{ display:flex; align-items:baseline; gap:14px; }
+  .layq{ font-size:15.5px; font-weight:600; flex:1; }
+  .layn{ font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .bar{ height:3px; background:var(--rule); margin-top:10px; }
+  .bar span{ display:block; height:3px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:14px; }
+  td,th{ text-align:left; padding:9px 0; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--soft); font-weight:700; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--mid); }
+  .q{ color:var(--mid); }
+  .hit{ color:var(--good); font-weight:700; }
+  .miss{ color:var(--fail); font-weight:700; }
+  .tag{ font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); }
+  .empty{ color:var(--warn); font-size:14px; padding:10px 0; }
+  .foot{ margin-top:46px; padding-top:20px; border-top:1px solid var(--rule); font-size:12.5px; color:var(--soft); line-height:1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Deep AI visibility audit</h1>
+  <p class="sub">Ten buyer questions asked directly of the answer engines, twenty-five pages crawled as a real
+    crawler, and every public source that corroborates the business. Takes about two minutes.</p>
+
+  <form onsubmit="return run(event)">
+    <input id="d" placeholder="clientdomain.com" autocomplete="off" spellcheck="false" required>
+    <button id="btn" type="submit">Run audit &rarr;</button>
+  </form>
+  <p class="note">Private page. Every run is saved as a dated baseline.</p>
+
+  <div class="prog" id="prog"></div>
+  <p class="err" id="err"></p>
+
+  <div id="out">
+    <div class="m" id="dom"></div>
+    <div class="score" style="margin-top:14px"><b id="big"></b><span class="of">out of 100</span><span class="of" id="grade"></span></div>
+    <div class="meta" id="meta"></div>
+
+    <h2>Where the score comes from</h2>
+    <div id="layers"></div>
+
+    <h2>Buyer questions we asked</h2>
+    <table><thead><tr><th>Stage</th><th>Question</th><th style="text-align:right">Cited</th></tr></thead>
+      <tbody id="queries"></tbody></table>
+
+    <h2>Sources you could get into</h2>
+    <div id="targets"></div>
+
+    <h2>Cited instead of you</h2>
+    <table><thead><tr><th>Domain</th><th>Type</th><th style="text-align:right">Appears in</th></tr></thead>
+      <tbody id="rivals"></tbody></table>
+
+    <h2>Crawler access across the site</h2>
+    <div id="pages"></div>
+
+    <div class="foot" id="foot"></div>
+  </div>
+</div>
+
+<script>
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const col = p => p>=85?'var(--good)':p>=60?'var(--warn)':'var(--fail)';
+const KEY = new URLSearchParams(location.search).get('k') || '';
+
+async function run(e){
+  e.preventDefault();
+  const d=document.getElementById('d').value.trim();
+  const btn=document.getElementById('btn'), err=document.getElementById('err'),
+        out=document.getElementById('out'), prog=document.getElementById('prog');
+  if(!d) return false;
+  btn.disabled=true; btn.textContent='Running…'; err.style.display='none'; out.style.display='none';
+  prog.style.display='block';
+  const steps=['Fetching the site as three different crawlers…','Crawling twenty-five pages…',
+               'Checking Wikipedia, press, Reddit and profiles…','Asking the engines your buyer questions…',
+               'Reading who they cited instead…','Saving the baseline…'];
+  let i=0; prog.innerHTML='<b>'+steps[0]+'</b>';
+  const tick=setInterval(()=>{ i=Math.min(i+1,steps.length-1); prog.innerHTML='<b>'+steps[i]+'</b>'; }, 18000);
+  try{
+    const r=await fetch('/api/deep-scan?d='+encodeURIComponent(d)+(KEY?'&k='+encodeURIComponent(KEY):''));
+    const j=await r.json();
+    if(j.inconclusive){ err.textContent=j.error; err.style.display='block'; return false; }
+    if(!r.ok){ err.textContent=j.error||'That did not complete.'; err.style.display='block'; return false; }
+    render(j); out.style.display='block';
+  }catch(_){ err.textContent='Could not complete the audit.'; err.style.display='block'; }
+  finally{ clearInterval(tick); prog.style.display='none'; btn.disabled=false; btn.textContent='Run audit →'; }
+  return false;
+}
+
+function render(j){
+  const P=j.pillars, M=j.pillarMax;
+  document.getElementById('dom').textContent = j.host+' · '+String(j.measuredAt).slice(0,10)+' · scanned from '+j.proxy+' IP';
+  document.getElementById('big').textContent = j.total;
+  document.getElementById('big').style.color = col(j.total);
+  document.getElementById('grade').textContent = 'grade '+j.grade;
+  const b=j.baseline||{};
+  document.getElementById('meta').textContent =
+    (b.saved ? 'Saved as a baseline. ' : 'Not saved: '+(b.reason||'unknown')+'. ') +
+    j.siteWide.pagesTested+' pages crawled · '+j.citation.queriesTested+' buyer questions asked.';
+
+  const order=[['offsite','Being cited elsewhere'],['access','Getting in'],['entity','Knowing who you are'],
+               ['content','Something worth quoting'],['freshness','Signs of life'],['technical','Technical foundation']];
+  document.getElementById('layers').innerHTML = order.map(([k,label])=>{
+    const got=P[k]||0, max=M[k]||20, pct=Math.round(got/max*100);
+    return '<div class="lay"><div class="layhead"><span class="layq">'+label+'</span>'+
+      '<span class="layn" style="color:'+col(pct)+'">'+got+' / '+max+'</span></div>'+
+      '<div class="bar"><span style="width:'+pct+'%;background:'+col(pct)+'"></span></div></div>';
+  }).join('');
+
+  document.getElementById('queries').innerHTML = (j.citation.runs||[]).map(r=>
+    '<tr><td class="tag">'+esc(r.stage||'')+'</td><td class="q">'+esc(r.query)+'</td>'+
+    '<td class="n"><span class="'+(r.named>0?'hit':'miss')+'">'+r.named+'</span> / '+r.sources+'</td></tr>').join('')
+    || '<tr><td colspan="3" class="empty">No questions completed.</td></tr>';
+
+  const t=j.targets||[];
+  document.getElementById('targets').innerHTML = t.length
+    ? '<table><tbody>'+t.map(x=>'<tr><td>'+esc(x.host)+'</td><td class="tag">'+esc(x.type)+'</td>'+
+        '<td class="n">'+x.citedIn+' / '+x.ofQueries+'</td></tr>').join('')+'</tbody></table>'
+    : '<div class="empty">None. Every cited source is a competitor’s own domain, so there is nothing to get listed on — the only way in is being cited directly, or creating the roundups that do not exist yet.</div>';
+
+  document.getElementById('rivals').innerHTML = (j.rivals||[]).slice(0,15).map(x=>
+    '<tr><td>'+esc(x.host)+'</td><td class="tag">'+esc(x.type)+'</td>'+
+    '<td class="n">'+x.citedIn+' / '+x.ofQueries+'</td></tr>').join('')
+    || '<tr><td colspan="3" class="empty">Nobody consistently cited.</td></tr>';
+
+  const sw=j.siteWide;
+  const bad=(sw.pages||[]).filter(p=>!p.served);
+  document.getElementById('pages').innerHTML =
+    '<div class="lay"><div class="layhead"><span class="layq">'+sw.pagesTested+' pages crawled</span>'+
+    '<span class="layn" style="color:'+(sw.pagesBlocked?'var(--fail)':'var(--good)')+'">'+
+    sw.pagesBlocked+' refused · '+sw.pagesThin+' thin</span></div></div>' +
+    (bad.length ? '<table><tbody>'+bad.slice(0,10).map(p=>
+      '<tr><td class="q">'+esc(String(p.url).replace(/^https?:\/\/(www\.)?/,''))+'</td>'+
+      '<td class="n">HTTP '+p.gptbot.status+'</td></tr>').join('')+'</tbody></table>' : '');
+
+  const fr=j.freshness||{};
+  document.getElementById('foot').textContent =
+    'Freshness: '+(fr.daysSinceUpdate==null?'nothing on the site carries a date':'last dated item '+fr.daysSinceUpdate+' days old')+
+    ' · '+(fr.datedItems||0)+' dated items across '+(fr.sitemapUrls||0)+' sitemap URLs. '+
+    'Off-site is scored on whether the engines cite this business for real buyer questions, weighted heaviest because it is the only pillar that predicts citation.';
+}
+</script>
+</body>
+</html>
