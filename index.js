@@ -1218,7 +1218,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "2.1.0",
+  version: "2.2.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -1976,6 +1976,8 @@ app.get("/api/deep-scan", async (req, res) => {
     // 3) reuse the query set the scan already ran and paid for, rather than
     //    re-querying the same engine for the same answers.
     const runs = (cite && cite.runs) ? cite.runs.slice() : [];
+    // Same long-tail suggestions the emailed report gets, so both documents read alike.
+    const deepProfile = await siteProfile(site).catch(() => null);
 
     // 4) who keeps getting cited instead — this is the target list
     const freq = new Map();
@@ -2012,6 +2014,11 @@ app.get("/api/deep-scan", async (req, res) => {
       },
       citation: { queriesTested: runs.length, queriesWhereCited: citedQueries, runs },
       quickWins: quickWins(base, citationDetail(cite)),
+      suggested: (() => {
+        const m = deepProfile ? buyerQueryMatrix(deepProfile) : [];
+        return m.filter(q => q.tier === "longtail").sort((x, y) => y.ease - x.ease)
+                .slice(0, 5).map(q => ({ query: q.query, why: q.why }));
+      })(),
       competitors, targets, rivals,
       byStage: (() => {
         const g = {};

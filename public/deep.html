@@ -80,16 +80,13 @@
     <h2>Where the score comes from</h2>
     <div id="layers"></div>
 
-    <h2>Buyer questions we asked</h2>
+    <h2>The questions your buyers ask</h2>
     <table><thead><tr><th>Stage</th><th>Question</th><th style="text-align:right">Cited</th></tr></thead>
       <tbody id="queries"></tbody></table>
+    <div id="suggest"></div>
 
-    <h2>Sources you could get into</h2>
-    <div id="targets"></div>
-
-    <h2>Cited instead of you</h2>
-    <table><thead><tr><th>Domain</th><th>Type</th><th style="text-align:right">Appears in</th></tr></thead>
-      <tbody id="rivals"></tbody></table>
+    <h2>Start here</h2>
+    <div id="tasks"></div>
 
     <h2>Crawler access across the site</h2>
     <div id="pages"></div>
@@ -152,16 +149,38 @@ function render(j){
     '<td class="n"><span class="'+(r.named>0?'hit':'miss')+'">'+r.named+'</span> / '+r.sources+'</td></tr>').join('')
     || '<tr><td colspan="3" class="empty">No questions completed.</td></tr>';
 
-  const t=j.targets||[];
-  document.getElementById('targets').innerHTML = t.length
-    ? '<table><tbody>'+t.map(x=>'<tr><td>'+esc(x.host)+'</td><td class="tag">'+esc(x.type)+'</td>'+
-        '<td class="n">'+x.citedIn+' / '+x.ofQueries+'</td></tr>').join('')+'</tbody></table>'
-    : '<div class="empty">None. Every cited source is a competitor’s own domain, so there is nothing to get listed on — the only way in is being cited directly, or creating the roundups that do not exist yet.</div>';
+  // Where they could stand, alongside where they do.
+  const sug=j.suggested||[];
+  document.getElementById('suggest').innerHTML = sug.length
+    ? '<div class="lay"><div class="layq" style="margin-bottom:6px">Five more you could win</div>'+
+      '<div class="empty" style="margin:0 0 8px">Narrower questions, answered by far fewer pages, so less has to be displaced for you to appear.</div>'+
+      sug.map(q=>'<div style="margin:8px 0"><div class="q">'+esc(q.query)+'</div>'+
+        (q.why?'<div class="empty" style="margin:2px 0 0">'+esc(q.why)+'</div>':'')+'</div>').join('')+'</div>'
+    : '';
 
-  document.getElementById('rivals').innerHTML = (j.rivals||[]).slice(0,15).map(x=>
-    '<tr><td>'+esc(x.host)+'</td><td class="tag">'+esc(x.type)+'</td>'+
-    '<td class="n">'+x.citedIn+' / '+x.ofQueries+'</td></tr>').join('')
-    || '<tr><td colspan="3" class="empty">Nobody consistently cited.</td></tr>';
+  // One list. Site fixes and listings are the same thing to whoever has to do them.
+  const tasks=(j.quickWins||[]).map(w=>({speed:w.effort,what:w.action,why:w.why,pts:w.points}));
+  (j.targets||[]).slice(0,4).forEach(x=>tasks.push({
+    speed:'this month', what:'Get onto '+x.host,
+    why:'Cited in '+x.citedIn+' of '+x.ofQueries+' questions and accepts new entries.',
+    pts:Math.min(6,2*x.citedIn) }));
+  const rank={today:0,'this month':1};
+  tasks.sort((a,b)=>(rank[a.speed]-rank[b.speed])||(b.pts-a.pts));
+  const group=(label,items)=>items.length
+    ? '<div class="lay"><div class="layq" style="margin-bottom:6px">'+label+'</div>'+
+      items.map(t=>'<div style="margin:8px 0"><div class="layhead"><span class="q">'+esc(t.what)+'</span>'+
+        '<span class="layn" style="color:var(--good)">+'+t.pts+'</span></div>'+
+        '<div class="empty" style="margin:2px 0 0">'+esc(t.why)+'</div></div>').join('')+'</div>'
+    : '';
+  const rivalNote=(j.rivals||[]).length
+    ? '<div class="empty" style="margin-top:10px">Winning these answers today: '+
+      (j.rivals||[]).slice(0,5).map(x=>esc(x.host)).join(', ')+
+      '. You cannot be listed on a competitor\'s own site, so those are the benchmark rather than a task.</div>'
+    : '';
+  document.getElementById('tasks').innerHTML =
+    (tasks.length ? group('Today',tasks.filter(t=>t.speed==='today'))+
+                    group('This month',tasks.filter(t=>t.speed==='this month'))
+                  : '<div class="empty">Nothing measurable to act on from this scan.</div>') + rivalNote;
 
   const sw=j.siteWide;
   const bad=(sw.pages||[]).filter(p=>!p.served);
