@@ -323,11 +323,20 @@ const buyerQuerySet = async (site, wide = false) => {
   const city = one.city || "";
   // Pull the category out of the model's own question so the three stages stay
   // about the same business, not three unrelated searches.
-  let cat = String(one.query || "")
-    .replace(/^(who are|what are|which are|who is|what is)\s+(the\s+)?(best|top|leading)?\s*/i, "")
-    .replace(new RegExp("\\s+in\\s+" + city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*$", "i"), "")
-    .replace(/\?+$/, "").trim();
-  if (!cat || cat.length < 4) cat = "providers";
+  // Prefer the category the inference actually produced. Only fall back to
+  // carving one out of the question, and only keep the result if it reads as a
+  // noun phrase - otherwise every composed query inherits the mess.
+  let cat = String(one.category || "").trim();
+  if (!cat) {
+    cat = String(one.query || "")
+      .replace(/^(who are|what are|which are|who is|what is)\s+(the\s+)?(best|top|leading)?\s*/i, "")
+      .replace(new RegExp("\\s+in\\s+" + city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*$", "i"), "")
+      .replace(/\?+$/, "").trim();
+  }
+  const nounish = cat && cat.length >= 4 && cat.length <= 46 && !/\?/.test(cat) &&
+    !/^(how|what|why|when|where|who|which|should|can|do|does|is|are|will|would)\b/i.test(cat) &&
+    cat.split(/\s+/).length <= 6;
+  if (!nounish) cat = "providers";
   const where = city ? " in " + city : "";
   const sing = cat.replace(/ies$/, "y").replace(/(companies|agencies)$/i, m => m.toLowerCase() === "companies" ? "company" : "agency").replace(/s$/, "");
   // "a AI visibility company" reads as machine-written, and these questions go to a
@@ -843,6 +852,18 @@ const inferBuyerQuery = async (site) => {
     } catch (e) {}
   }
 
+  // A category is a noun phrase. Anything that opens with a question word, carries
+  // a "?", or runs long is a sentence the model gave us instead, and composing
+  // with it yields nonsense in a document a prospect reads.
+  const usableCategory = (c) => {
+    const t = String(c || "").trim();
+    if (t.length < 3 || t.length > 46) return false;
+    if (/\?/.test(t)) return false;
+    if (/^(how|what|why|when|where|who|which|should|can|do|does|is|are|will|would)\b/i.test(t)) return false;
+    if (t.split(/\s+/).length > 6) return false;
+    return true;
+  };
+
   const brandTok = site.host.replace(/^www\./, "").split(".")[0].toLowerCase();
   const clean = (t) => {
     let q = String(t || "").trim().replace(/^["'\s]+|["'\s.]+$/g, "").split("\n")[0];
@@ -871,12 +892,15 @@ const inferBuyerQuery = async (site) => {
 
   // Ask Claude for one buyer-intent query. It is one short call and far better than string slicing.
   if (ANTHROPIC_API_KEY) {
+    // Ask for the CATEGORY, not a question. Every buyer query is composed from it
+    // downstream, and a question here cannot be composed with - it produced
+    // "who are the best How do I get my business cited by AI search engines in Miami".
     const prompt = "A business has this homepage.\n\nTitle: " + title + "\nDescription: " + desc +
       (city ? "\nCity: " + city : "") +
-      "\n\nWrite the ONE search question a potential customer would ask an AI assistant when looking for a business like this, " +
-      "without knowing this company exists. Use the category of service, never the brand name. " +
-      "Format it like a real question, for example: who are the best real estate agents in Tampa. " +
-      "Reply with the question only, no quotes, no preamble, under 90 characters.";
+      "\n\nName the CATEGORY of business this is, as a short plural noun phrase a customer would " +
+      "use when searching, without the brand name and without a location. " +
+      "Examples: real estate agents. personal injury lawyers. pop-up retail agencies. " +
+      "Reply with the noun phrase only. No question, no verb, no preamble, under 40 characters.";
     try {
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -898,8 +922,10 @@ const inferBuyerQuery = async (site) => {
                .replace(/\s+(is|are|was)\s+(a|an|the)\s+/i, " ").trim()
                .replace(/^[,\-\s]+|[,\-\s]+$/g, "");
         }
-        if (q && q.length > 12 && q.length < 130 && !q.toLowerCase().includes(brand)) {
-          return { query: q, title, city, via: t === q ? "claude" : "claude-debranded" };
+        if (q && usableCategory(q) && !q.toLowerCase().includes(brand)) {
+          const where = city ? " in " + city : "";
+          return { query: ("who are the best " + q + where).slice(0, 140),
+                   category: q, title, desc, city, via: t === q ? "claude" : "claude-debranded" };
         }
       }
     } catch (e) {}
@@ -928,7 +954,7 @@ const inferBuyerQuery = async (site) => {
               brokerage: "brokerages", consultancy: "consultancies" }[w.toLowerCase()] || w))
     .replace(/\b(consultant|attorney|lawyer|dentist|contractor|agent|broker|platform|tool|service)\b\s*$/i, "$1s");
   const q = ("who are the best " + category + (city ? " in " + city : "")).replace(/\s{2,}/g, " ").slice(0, 120);
-  return { query: q, title, city, via: "deterministic" };
+  return { query: q, category, title, desc, city, via: "deterministic" };
 };
 
 // An engine writes the brand, not the URL. Matching only "specularisinc.com"
@@ -1030,7 +1056,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "1.2.0",
+  version: "1.3.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -1440,10 +1466,11 @@ app.post("/api/full-report", async (req, res) => {
     // 1) kick off the full n8n audit so the PDF still lands in their inbox.
     //    The scan already scored this site; send those numbers along so the report
     //    explains them rather than grading it a second time and disagreeing.
-    // Paid, narrow: the three buyer questions this tier is meant to answer.
-    // This call is what makes the report's citation claims measured rather than
-    // inferred - without it the PDF was asserting engine behaviour nobody asked about.
-    const citeForReport = await getCitationSignal(site, false, true, false).catch(() => null);
+    // Free tier deliberately. The n8n workflow runs its own Perplexity and Claude
+    // answer tests downstream with a better query set, so paying here would buy the
+    // same measurement twice - and feeding a weaker query set into the off-site
+    // pillar moves the score for a reason that has nothing to do with the business.
+    const citeForReport = await getCitationSignal(site).catch(() => null);
     const snap = await scoreSnapshot(site, citeForReport).catch(() => null);
     const authoritative = snap && !snap.inconclusive ? {
       total_score: snap.total,
