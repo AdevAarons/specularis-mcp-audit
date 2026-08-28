@@ -1218,7 +1218,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "2.0.0",
+  version: "2.1.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -1685,9 +1685,18 @@ app.post("/api/full-report", async (req, res) => {
       profiles_verified: snap.profilesVerified || 0,
       profiles: (snap.sameAs || []).slice(0, 12),
     } : null;
+    // The queries this business could realistically win, derived from what the site
+    // says it does. One Haiku call, no engine calls, so it costs almost nothing.
+    const prof = await siteProfile(site).catch(() => null);
+    const matrix = prof ? buyerQueryMatrix(prof) : [];
+    const suggested = matrix.filter(q => q.tier === "longtail")
+      .sort((x, y) => y.ease - x.ease).slice(0, 5)
+      .map(q => ({ query: q.query, why: q.why }));
     const auditPayload = { name: leadName, email, website_url: site.url,
                            role: role || "Other", scores: authoritative,
-                           citation: cd, corroboration: corr, quick_wins: quickWins(snap, cd) };
+                           citation: cd, corroboration: corr,
+                           suggested_queries: suggested,
+                           quick_wins: quickWins(snap, cd) };
     triggerFullAudit(auditPayload).catch(() => {});
 
     if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) {
