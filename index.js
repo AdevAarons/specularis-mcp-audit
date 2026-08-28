@@ -318,6 +318,118 @@ const CITE_TTL = 24 * 60 * 60 * 1000;   // a day. Earned citations move in weeks
 const CITE_MIN_REFRESH = 15 * 60 * 1000;  // but never let a forced re-check run more than 4x an hour
 const CITE_CACHE = new Map();
 
+// A buyer query is only as good as the description behind it. Reading the role a
+// lead picked from a dropdown produces "who are the best Founder in Denver"; reading
+// the site produces "who are the best structural steel contractors in Denver".
+// One cheap call, strict validation, deterministic fallback.
+const siteProfile = async (site) => {
+  const home = await fetchWithTimeout(site.url);
+  const h = home.text || "";
+  const title = (h.match(/<title[^>]*>([^<]{3,140})<\/title>/i)?.[1] || "").trim();
+  const desc  = (h.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{10,300})/i)?.[1] || "").trim();
+  const heads = (h.match(/<h[12][^>]*>([\s\S]{3,120}?)<\/h[12]>/gi) || [])
+    .map(x => x.replace(/<[^>]+>/g, " ").replace(/\s{2,}/g, " ").trim()).filter(Boolean).slice(0, 12);
+
+  // Schema is the most reliable source for place and person, so read it first.
+  let city = "", region = "", founder = "";
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(h)) !== null) {
+    try {
+      const j = JSON.parse(m[1]); const arr = Array.isArray(j) ? j : (j["@graph"] || [j]);
+      for (const nd of arr) {
+        const a = (nd && nd.address) || {};
+        if (!city && a.addressLocality) city = String(a.addressLocality).trim();
+        if (!region && a.addressRegion) region = String(a.addressRegion).trim();
+        const t = String(nd && nd["@type"] || "");
+        if (!founder && /Person/i.test(t) && nd.name) founder = String(nd.name).trim();
+        if (!founder && nd && nd.founder && nd.founder.name) founder = String(nd.founder.name).trim();
+      }
+    } catch (e) {}
+  }
+
+  const fallback = { service: "", variants: [], capabilities: [], segment: "",
+                     city, region, founder, title, via: "deterministic" };
+  if (!ANTHROPIC_API_KEY) return fallback;
+
+  const prompt =
+    "Homepage of one business.\n\nTitle: " + title + "\nDescription: " + desc +
+    (heads.length ? "\nHeadings: " + heads.join(" | ") : "") +
+    (city ? "\nCity: " + city : "") + (region ? "\nState/Region: " + region : "") +
+    "\n\nReturn ONLY JSON, no prose:\n" +
+    '{"service":"<plural noun phrase a buyer would search, e.g. structural steel contractors>",' +
+    '"variants":["<up to 2 more specific service phrases>"],' +
+    '"capabilities":["<up to 4 concrete things they do, e.g. fabrication>"],' +
+    '"segment":"<who they serve, e.g. commercial construction, or empty>",' +
+    '"city":"<city or empty>","region":"<state or empty>"}\n' +
+    "Never include the brand name. Use the words a customer would use, not marketing language.";
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 400,
+        messages: [{ role: "user", content: prompt }] }),
+    });
+    if (!r.ok) return fallback;
+    const j = await r.json();
+    const txt = (j.content || []).filter(b => b.type === "text").map(b => b.text).join(" ");
+    const raw = JSON.parse((txt.match(/\{[\s\S]*\}/) || ["{}"])[0]);
+    const brand = site.host.replace(/^www\./, "").split(".")[0].toLowerCase();
+    const clean = (v) => String(v || "").trim().replace(/\s{2,}/g, " ");
+    const ok = (v) => v && v.length >= 3 && v.length <= 60 && !v.toLowerCase().includes(brand) &&
+      !/^(how|what|why|who|which|when|where)\b/i.test(v) && !/\?/.test(v);
+    const service = ok(clean(raw.service)) ? clean(raw.service) : "";
+    if (!service) return fallback;
+    return {
+      service,
+      variants: (Array.isArray(raw.variants) ? raw.variants : []).map(clean).filter(ok).slice(0, 2),
+      capabilities: (Array.isArray(raw.capabilities) ? raw.capabilities : []).map(clean)
+        .filter(v => v && v.length >= 3 && v.length <= 40).slice(0, 4),
+      segment: ok(clean(raw.segment)) ? clean(raw.segment) : "",
+      city: clean(raw.city) || city, region: clean(raw.region) || region,
+      founder, title, via: "claude",
+    };
+  } catch (e) { return fallback; }
+};
+
+// The comprehensive set: the same service asked the several ways a buyer actually
+// asks it, across intent stages and both city and state, because engines answer
+// those differently and a business can be visible on one and absent from the next.
+const buyerQueryMatrix = (p) => {
+  const svc = p.service || "providers";
+  const city = p.city || "";
+  const region = p.region || "";
+  const where = city ? " in " + city : (region ? " in " + region : "");
+  const wider = region && region !== city ? " in " + region : where;
+  const v1 = p.variants[0] || svc;
+  const v2 = p.variants[1] || v1;
+  const caps = (p.capabilities || []).slice(0, 3);
+  const capPhrase = caps.length >= 2
+    ? caps.slice(0, -1).join(", ") + " and " + caps[caps.length - 1]
+    : (caps[0] || "");
+  const seg = p.segment ? " for " + p.segment : "";
+  const sing = svc.replace(/ies$/, "y").replace(/s$/, "");
+  const art = /^[aeiou]/i.test(sing) ? "an" : "a";
+
+  const out = [
+    { stage: "decision",      kind: "core",       query: "Who are the best " + svc + where + "?" },
+    { stage: "decision",      kind: "hire",       query: "What company should I hire for " + v1 + wider + "?" },
+    { stage: "decision",      kind: "reliability",query: "Who are the most reliable " + svc + wider + "?" },
+    { stage: "consideration", kind: "choose",     query: "How do I choose " + art + " " + sing + where + "?" },
+    { stage: "awareness",     kind: "criteria",   query: "What should I look for in " + svc + "?" },
+    { stage: "comparison",    kind: "shortlist",  query: "Top " + svc + where + " compared" },
+  ];
+  if (capPhrase) {
+    out.splice(2, 0, { stage: "decision", kind: "capability",
+      query: "Who provides " + capPhrase + seg + where + "?" });
+    if (city) out.splice(4, 0, { stage: "decision", kind: "scope",
+      query: "Which " + city + " " + svc + " can handle " + capPhrase + "?" });
+  }
+  if (p.segment) out.push({ stage: "consideration", kind: "segment",
+    query: "Who works with " + p.segment + " for " + v2 + where + "?" });
+  return out.map(q => ({ ...q, query: q.query.replace(/\s{2,}/g, " ").slice(0, 160) }));
+};
+
 const buyerQuerySet = async (site, wide = false) => {
   const one = await inferBuyerQuery(site);
   const city = one.city || "";
@@ -1056,7 +1168,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "1.3.0",
+  version: "1.4.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -1448,6 +1560,17 @@ const quickWins = (s, cd) => {
   return w.filter(x => x.points > 0 || x.effort === "today")
           .sort((a, b) => (rank[a.effort] - rank[b.effort]) || (b.points - a.points));
 };
+
+// Read-only: what would we ask the engines about this site? No engine calls, so
+// this can be checked against a hundred sites for the price of a Haiku call each.
+app.get("/api/queries", async (req, res) => {
+  try {
+    const site = normalizeUrl(req.query.d || "");
+    if (!site) return res.status(400).json({ error: "bad domain" });
+    const profile = await siteProfile(site);
+    res.json({ host: site.host, profile, queries: buyerQueryMatrix(profile) });
+  } catch (e) { res.status(500).json({ error: String(e).slice(0, 160) }); }
+});
 
 app.post("/api/full-report", async (req, res) => {
   try {
