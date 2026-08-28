@@ -382,17 +382,21 @@ const siteProfile = async (site) => {
     (body ? "\nPage text: " + body : "") +
     (city ? "\nCity: " + city : "") + (region ? "\nState/Region: " + region : "") +
     "\n\nReturn ONLY JSON, no prose:\n" +
-    '{"service":"<plural noun phrase a buyer would search, e.g. structural steel contractors>",' +
+    '{"service":"<the TYPE OF COMPANY, plural, that a buyer would hire - e.g. structural steel contractors, real estate brokerages, personal injury lawyers. Never a product, listing or outcome such as homes for sale or steel products>",' +
     '"variants":["<up to 2 more specific service phrases>"],' +
     '"capabilities":["<up to 4 services as noun phrases, e.g. fabrication, field welding, permit expediting - never verb phrases like buy homes>"],' +
     '"segment":"<who they serve, e.g. commercial construction, or empty>",' +
     '"city":"<city or empty>","region":"<state or empty>"}\n' +
-    "Never include the brand name. Use the words a customer would use, not marketing language.";
+    "Never include the brand name. Use the words a customer would use, not marketing language. " +
+    "The service field must complete the sentence \"Who are the best ___?\" and name providers you could hire.";
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
       body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 400,
+        // Same site, same queries, every run. A report that changes its questions
+        // between scans cannot be compared to the one before it.
+        temperature: 0,
         messages: [{ role: "user", content: prompt }] }),
     });
     if (!r.ok) return fallback;
@@ -1204,7 +1208,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "1.7.0",
+  version: "1.8.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
