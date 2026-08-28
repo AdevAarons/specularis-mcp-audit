@@ -425,49 +425,59 @@ const siteProfile = async (site) => {
   } catch (e) { return fallback; }
 };
 
-// The comprehensive set: the same service asked the several ways a buyer actually
-// asks it, across intent stages and both city and state, because engines answer
-// those differently and a business can be visible on one and absent from the next.
+// Two sets, because they answer different questions for the reader.
+// CORE is the head of the category - the queries everyone competes for, worth
+// measuring because that is where the money is and where you probably lose.
+// LONG TAIL is where a smaller business can actually win: a specific capability,
+// for a specific buyer, in a specific place. Fewer pages answer those, so fewer
+// pages have to be displaced. Ease is that logic made explicit: every extra
+// qualifier narrows the field.
 const buyerQueryMatrix = (p) => {
-  // No category means no honest question. "Who are the best providers?" returns
-  // nothing for anybody, and reporting that as "cited in 0 of 6" is a false zero
-  // dressed as a measurement. Ask nothing instead, and say we could not tell.
   if (!p || !p.service) return [];
   const svc = p.service;
   const city = p.city || "";
   const region = p.region || "";
   const where = city ? " in " + city : (region ? " in " + region : "");
   const wider = region && region !== city ? " in " + region : where;
-  const v1 = p.variants[0] || svc;
-  const v2 = p.variants[1] || v1;
   const lower = (t) => /^[A-Z][a-z]/.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t;
-  const caps = (p.capabilities || []).slice(0, 2).map(lower);
-  const capPhrase = caps.length >= 2
-    ? caps.slice(0, -1).join(", ") + " and " + caps[caps.length - 1]
-    : (caps[0] || "");
-  // "for founders, real estate agents, professional firms" is nobody's search.
+  const caps = (p.capabilities || []).map(lower);
+  const c1 = caps[0] || "", c2 = caps[1] || "";
+  const capPair = (c1 && c2) ? c1 + " and " + c2 : c1;
   const segOne = String(p.segment || "").split(/,| and /)[0].trim();
   const seg = segOne ? " for " + segOne : "";
+  const v1 = p.variants[0] || svc;
   const sing = svc.replace(/ies$/, "y").replace(/s$/, "");
   const art = /^[aeiou]/i.test(sing) ? "an" : "a";
+  const out = [];
+  const add = (tier, stage, ease, query, why) => {
+    const q = String(query).replace(/\s{2,}/g, " ").trim().slice(0, 160);
+    if (q.length > 12) out.push({ tier, stage, ease, query: q, why: why || "" });
+  };
 
-  const out = [
-    { stage: "decision",      kind: "core",       query: "Who are the best " + svc + where + "?" },
-    { stage: "decision",      kind: "hire",       query: "What company should I hire for " + v1 + wider + "?" },
-    { stage: "decision",      kind: "reliability",query: "Who are the most reliable " + svc + wider + "?" },
-    { stage: "consideration", kind: "choose",     query: "How do I choose " + art + " " + sing + where + "?" },
-    { stage: "awareness",     kind: "criteria",   query: "What should I look for in " + svc + "?" },
-    { stage: "comparison",    kind: "shortlist",  query: "Top " + svc + where + " compared" },
-  ];
-  if (capPhrase) {
-    out.splice(2, 0, { stage: "decision", kind: "capability",
-      query: "Who provides " + capPhrase + seg + where + "?" });
-    if (city) out.splice(4, 0, { stage: "decision", kind: "scope",
-      query: "Which " + city + " " + svc + " can handle " + capPhrase + "?" });
-  }
-  if (segOne) out.push({ stage: "consideration", kind: "segment",
-    query: "Who works with " + segOne + " for " + v2 + where + "?" });
-  return out.map(q => ({ ...q, query: q.query.replace(/\s{2,}/g, " ").slice(0, 160) }));
+  // Head of the category. High intent, high competition.
+  add("core", "decision", 1, "Who are the best " + svc + where + "?");
+  add("core", "decision", 1, "What company should I hire for " + v1 + wider + "?");
+  add("core", "decision", 1, "Who are the most reliable " + svc + wider + "?");
+  add("core", "consideration", 2, "How do I choose " + art + " " + sing + where + "?");
+  add("core", "awareness", 2, "What should I look for in " + svc + "?");
+  add("core", "comparison", 1, "Top " + svc + where + " compared");
+
+  // The long tail. Each qualifier removes competitors from the answer.
+  if (capPair) add("longtail", "decision", 3, "Who provides " + capPair + seg + where + "?",
+    "Names a specific capability, so only providers who actually do it can be listed.");
+  if (c1 && city) add("longtail", "decision", 3, "Which " + city + " " + svc + " handle " + c1 + "?",
+    "Capability plus city. Very few pages answer this, so very few have to be displaced.");
+  if (segOne) add("longtail", "decision", 3, "Best " + svc + " for " + segOne + where + "?",
+    "Buyer-type queries are answered by far fewer sources than the open category.");
+  if (segOne && c1) add("longtail", "consideration", 3, "Who does " + c1 + " for " + segOne + where + "?",
+    "Capability and buyer together. This is usually the easiest question to win outright.");
+  if (c1) add("longtail", "consideration", 2, "How much does " + c1 + " cost" + where + "?",
+    "Cost questions are under-answered, and engines lean on whoever publishes real numbers.");
+  if (c1 && city) add("longtail", "decision", 3, "I need " + c1 + " " + where.trim() + ", who should I call?",
+    "Phrased the way someone actually types it when they are ready to buy.");
+  if (c2) add("longtail", "consideration", 2, "What is involved in " + c2 + "?",
+    "Process questions reward a clear explainer page more than they reward reputation.");
+  return out;
 };
 
 const buyerQuerySet = async (site, wide = false) => {
@@ -1208,7 +1218,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "1.9.0",
+  version: "2.0.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -1609,7 +1619,12 @@ app.get("/api/queries", async (req, res) => {
     if (!site) return res.status(400).json({ error: "bad domain" });
     const profile = await siteProfile(site);
     const queries = buyerQueryMatrix(profile);
+    // Hardest first for what we measure, easiest first for what we suggest.
+    const core = queries.filter(q => q.tier === "core").slice(0, 5);
+    const tail = queries.filter(q => q.tier === "longtail")
+      .sort((x, y) => y.ease - x.ease).slice(0, 5);
     res.json({ host: site.host, profile, queries,
+      measure: core, suggest: tail,
       measurable: queries.length > 0,
       reason: queries.length ? null
         : (profile.reachable ? "could not determine what this business does from its homepage"
