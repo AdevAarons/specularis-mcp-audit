@@ -353,10 +353,23 @@ const siteProfile = async (site) => {
     } catch (e) {}
   }
 
-  // "Denver, CO" in the footer is the most common place a location actually lives.
+  // "Denver, CO" in the footer is where a location usually lives - but a national
+  // site lists dozens of markets, and taking the first match made compass.com
+  // "Peoria, IL". One place named repeatedly is an address; many places named once
+  // is a coverage map, and that business has no single city to ask about.
   if (!city) {
-    const mm = (h.replace(/<[^>]+>/g, " ")).match(new RegExp("([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)?),\\s*(" + ST + ")\\b"));
-    if (mm) { city = mm[1].trim(); region = region || mm[2]; }
+    const flat = h.replace(/<[^>]+>/g, " ");
+    const rx = new RegExp("([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)?),\\s*(" + ST + ")\\b", "g");
+    const tally = new Map(); let mm2;
+    while ((mm2 = rx.exec(flat)) !== null) {
+      const k = mm2[1].trim() + "|" + mm2[2];
+      tally.set(k, (tally.get(k) || 0) + 1);
+    }
+    const seen = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+    if (seen.length && seen.length <= 2) {
+      const [k] = seen[0]; const [c, r] = k.split("|");
+      city = c; region = region || r;
+    }
   }
   const reachable = !!(home.ok && (home.text || "").length > 400);
   const fallback = { service: "", variants: [], capabilities: [], segment: "",
@@ -371,7 +384,7 @@ const siteProfile = async (site) => {
     "\n\nReturn ONLY JSON, no prose:\n" +
     '{"service":"<plural noun phrase a buyer would search, e.g. structural steel contractors>",' +
     '"variants":["<up to 2 more specific service phrases>"],' +
-    '"capabilities":["<up to 4 concrete things they do, e.g. fabrication>"],' +
+    '"capabilities":["<up to 4 services as noun phrases, e.g. fabrication, field welding, permit expediting - never verb phrases like buy homes>"],' +
     '"segment":"<who they serve, e.g. commercial construction, or empty>",' +
     '"city":"<city or empty>","region":"<state or empty>"}\n' +
     "Never include the brand name. Use the words a customer would use, not marketing language.";
@@ -1191,7 +1204,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "1.6.0",
+  version: "1.7.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
