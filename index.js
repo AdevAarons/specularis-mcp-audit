@@ -1208,7 +1208,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "1.8.0",
+  version: "1.9.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -1656,9 +1656,23 @@ app.post("/api/full-report", async (req, res) => {
       pillar_max: snap.pillarMax,
     } : null;
     const cd = citationDetail(citeForReport);
+    // What already corroborates this business off-site. The report cross-references
+    // it against what the engines actually cite, because a business with press that
+    // never gets pulled has a different problem from one with no press at all.
+    const corr = snap ? {
+      wikipedia: !!(snap.corroboration && snap.corroboration.wikipedia),
+      wikidata: !!(snap.corroboration && snap.corroboration.wikidata),
+      wikipedia_inbound: (snap.corroboration && snap.corroboration.wikiLinks) || 0,
+      news: (snap.corroboration && snap.corroboration.news) || 0,
+      reddit: (snap.corroboration && snap.corroboration.reddit) || 0,
+      hacker_news: (snap.corroboration && snap.corroboration.hn) || 0,
+      profiles_declared: snap.profilesDeclared || 0,
+      profiles_verified: snap.profilesVerified || 0,
+      profiles: (snap.sameAs || []).slice(0, 12),
+    } : null;
     const auditPayload = { name: leadName, email, website_url: site.url,
                            role: role || "Other", scores: authoritative,
-                           citation: cd, quick_wins: quickWins(snap, cd) };
+                           citation: cd, corroboration: corr, quick_wins: quickWins(snap, cd) };
     triggerFullAudit(auditPayload).catch(() => {});
 
     if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) {
