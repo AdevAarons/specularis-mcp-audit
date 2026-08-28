@@ -1030,7 +1030,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "1.0.1",
+  version: "1.1.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -1214,6 +1214,7 @@ app.get("/", (_req, res) => res.json({
   mcp: "/mcp",
   // Whether the badge signing key is a real one or the public fallback baked into
   // the repo. A boolean only — never the value, and never a hash of it.
+  version: SERVER_INFO.version,
   badgeSecretSet: BADGE_SECRET !== "specularis-badge-dev-secret",
   // Booleans only - never the values. Tells us whether a variable reached the
   // running process, which is the thing Railway's UI cannot confirm.
