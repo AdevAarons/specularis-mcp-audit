@@ -358,8 +358,9 @@ const siteProfile = async (site) => {
     const mm = (h.replace(/<[^>]+>/g, " ")).match(new RegExp("([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)?),\\s*(" + ST + ")\\b"));
     if (mm) { city = mm[1].trim(); region = region || mm[2]; }
   }
+  const reachable = !!(home.ok && (home.text || "").length > 400);
   const fallback = { service: "", variants: [], capabilities: [], segment: "",
-                     city, region, founder, title, via: "deterministic" };
+                     city, region, founder, title, reachable, via: "deterministic" };
   if (!ANTHROPIC_API_KEY) return fallback;
 
   const prompt =
@@ -402,7 +403,7 @@ const siteProfile = async (site) => {
         .filter(v => v && v.length >= 3 && v.length <= 40).slice(0, 4),
       segment: ok(clean(raw.segment)) ? clean(raw.segment) : "",
       city: clean(raw.city) || city, region: clean(raw.region) || region,
-      founder, title, via: "claude",
+      founder, title, reachable, via: "claude",
     };
   } catch (e) { return fallback; }
 };
@@ -411,14 +412,19 @@ const siteProfile = async (site) => {
 // asks it, across intent stages and both city and state, because engines answer
 // those differently and a business can be visible on one and absent from the next.
 const buyerQueryMatrix = (p) => {
-  const svc = p.service || "providers";
+  // No category means no honest question. "Who are the best providers?" returns
+  // nothing for anybody, and reporting that as "cited in 0 of 6" is a false zero
+  // dressed as a measurement. Ask nothing instead, and say we could not tell.
+  if (!p || !p.service) return [];
+  const svc = p.service;
   const city = p.city || "";
   const region = p.region || "";
   const where = city ? " in " + city : (region ? " in " + region : "");
   const wider = region && region !== city ? " in " + region : where;
   const v1 = p.variants[0] || svc;
   const v2 = p.variants[1] || v1;
-  const caps = (p.capabilities || []).slice(0, 2);
+  const lower = (t) => /^[A-Z][a-z]/.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+  const caps = (p.capabilities || []).slice(0, 2).map(lower);
   const capPhrase = caps.length >= 2
     ? caps.slice(0, -1).join(", ") + " and " + caps[caps.length - 1]
     : (caps[0] || "");
@@ -1185,7 +1191,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "1.5.0",
+  version: "1.6.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -1585,7 +1591,12 @@ app.get("/api/queries", async (req, res) => {
     const site = normalizeUrl(req.query.d || "");
     if (!site) return res.status(400).json({ error: "bad domain" });
     const profile = await siteProfile(site);
-    res.json({ host: site.host, profile, queries: buyerQueryMatrix(profile) });
+    const queries = buyerQueryMatrix(profile);
+    res.json({ host: site.host, profile, queries,
+      measurable: queries.length > 0,
+      reason: queries.length ? null
+        : (profile.reachable ? "could not determine what this business does from its homepage"
+                             : "homepage could not be read from here") });
   } catch (e) { res.status(500).json({ error: String(e).slice(0, 160) }); }
 });
 
