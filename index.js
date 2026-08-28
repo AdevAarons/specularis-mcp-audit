@@ -327,8 +327,13 @@ const siteProfile = async (site) => {
   const h = home.text || "";
   const title = (h.match(/<title[^>]*>([^<]{3,140})<\/title>/i)?.[1] || "").trim();
   const desc  = (h.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{10,300})/i)?.[1] || "").trim();
-  const heads = (h.match(/<h[12][^>]*>([\s\S]{3,120}?)<\/h[12]>/gi) || [])
-    .map(x => x.replace(/<[^>]+>/g, " ").replace(/\s{2,}/g, " ").trim()).filter(Boolean).slice(0, 12);
+  const heads = (h.match(/<h[1-3][^>]*>([\s\S]{3,120}?)<\/h[1-3]>/gi) || [])
+    .map(x => x.replace(/<[^>]+>/g, " ").replace(/\s{2,}/g, " ").trim()).filter(Boolean).slice(0, 16);
+  // Visible copy, so the model sees what the business says it does rather than
+  // guessing from a title tag written for search engines.
+  const body = h.replace(/<(script|style|nav|footer)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s{2,}/g, " ").trim().slice(0, 2200);
+  const ST = "AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY";
 
   // Schema is the most reliable source for place and person, so read it first.
   let city = "", region = "", founder = "";
@@ -348,6 +353,11 @@ const siteProfile = async (site) => {
     } catch (e) {}
   }
 
+  // "Denver, CO" in the footer is the most common place a location actually lives.
+  if (!city) {
+    const mm = (h.replace(/<[^>]+>/g, " ")).match(new RegExp("([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)?),\\s*(" + ST + ")\\b"));
+    if (mm) { city = mm[1].trim(); region = region || mm[2]; }
+  }
   const fallback = { service: "", variants: [], capabilities: [], segment: "",
                      city, region, founder, title, via: "deterministic" };
   if (!ANTHROPIC_API_KEY) return fallback;
@@ -355,6 +365,7 @@ const siteProfile = async (site) => {
   const prompt =
     "Homepage of one business.\n\nTitle: " + title + "\nDescription: " + desc +
     (heads.length ? "\nHeadings: " + heads.join(" | ") : "") +
+    (body ? "\nPage text: " + body : "") +
     (city ? "\nCity: " + city : "") + (region ? "\nState/Region: " + region : "") +
     "\n\nReturn ONLY JSON, no prose:\n" +
     '{"service":"<plural noun phrase a buyer would search, e.g. structural steel contractors>",' +
@@ -375,8 +386,12 @@ const siteProfile = async (site) => {
     const txt = (j.content || []).filter(b => b.type === "text").map(b => b.text).join(" ");
     const raw = JSON.parse((txt.match(/\{[\s\S]*\}/) || ["{}"])[0]);
     const brand = site.host.replace(/^www\./, "").split(".")[0].toLowerCase();
+    // "flawlesssteel" must also catch "Flawless Steel", so strip separators on both
+    // sides before comparing - otherwise the brand rides into every query.
+    const squash = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const carriesBrand = (v) => { const q = squash(v); return q.includes(brand) || brand.includes(q); };
     const clean = (v) => String(v || "").trim().replace(/\s{2,}/g, " ");
-    const ok = (v) => v && v.length >= 3 && v.length <= 60 && !v.toLowerCase().includes(brand) &&
+    const ok = (v) => v && v.length >= 3 && v.length <= 60 && !carriesBrand(v) &&
       !/^(how|what|why|who|which|when|where)\b/i.test(v) && !/\?/.test(v);
     const service = ok(clean(raw.service)) ? clean(raw.service) : "";
     if (!service) return fallback;
@@ -403,11 +418,13 @@ const buyerQueryMatrix = (p) => {
   const wider = region && region !== city ? " in " + region : where;
   const v1 = p.variants[0] || svc;
   const v2 = p.variants[1] || v1;
-  const caps = (p.capabilities || []).slice(0, 3);
+  const caps = (p.capabilities || []).slice(0, 2);
   const capPhrase = caps.length >= 2
     ? caps.slice(0, -1).join(", ") + " and " + caps[caps.length - 1]
     : (caps[0] || "");
-  const seg = p.segment ? " for " + p.segment : "";
+  // "for founders, real estate agents, professional firms" is nobody's search.
+  const segOne = String(p.segment || "").split(/,| and /)[0].trim();
+  const seg = segOne ? " for " + segOne : "";
   const sing = svc.replace(/ies$/, "y").replace(/s$/, "");
   const art = /^[aeiou]/i.test(sing) ? "an" : "a";
 
@@ -425,8 +442,8 @@ const buyerQueryMatrix = (p) => {
     if (city) out.splice(4, 0, { stage: "decision", kind: "scope",
       query: "Which " + city + " " + svc + " can handle " + capPhrase + "?" });
   }
-  if (p.segment) out.push({ stage: "consideration", kind: "segment",
-    query: "Who works with " + p.segment + " for " + v2 + where + "?" });
+  if (segOne) out.push({ stage: "consideration", kind: "segment",
+    query: "Who works with " + segOne + " for " + v2 + where + "?" });
   return out.map(q => ({ ...q, query: q.query.replace(/\s{2,}/g, " ").slice(0, 160) }));
 };
 
@@ -1168,7 +1185,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "1.4.0",
+  version: "1.5.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
