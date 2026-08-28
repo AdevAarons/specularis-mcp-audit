@@ -1332,6 +1332,97 @@ app.get("/scan", (_req, res) => {
 });
 
 // Hand off to the existing n8n audit for the full scored report
+// The three things a prospect asks the moment they see a low off-site score:
+// what did you ask, who came up instead, and where is that coming from.
+// Split by whether they can realistically get in: a directory is a to-do,
+// a rival's own domain is not.
+const citationDetail = (cite) => {
+  const runs = (cite && cite.runs) || [];
+  if (!runs.length) return null;
+  const freq = new Map();
+  runs.forEach(run => (run.cited || []).forEach(x => {
+    if (x.you) return;
+    freq.set(x.host, (freq.get(x.host) || 0) + 1);
+  }));
+  const ranked = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)
+    .map(([host, c]) => ({ host, cited_in: c, of_queries: runs.length,
+      type: classifySource("https://" + host), joinable: isJoinable(host) }));
+  return {
+    queries_tested: runs.length,
+    queries_cited: runs.filter(r => r.named > 0 || r.answerNamed).length,
+    queries: runs.map(r => ({
+      stage: r.stage, query: r.query,
+      named_in_answer: !!r.answerNamed,
+      sources_mentioning_you: r.named,
+      cited_sources: (r.cited || []).map(x => x.host).slice(0, 8),
+    })),
+    targets: ranked.filter(x => x.joinable),
+    rivals: ranked.filter(x => !x.joinable),
+  };
+};
+
+// What to change first, ordered by how fast it can be done. Every item carries
+// the measurement that produced it and the points it recovers, so this is a
+// worklist built from this site rather than generic GEO advice.
+const quickWins = (s, cd) => {
+  if (!s || s.inconclusive) return [];
+  const w = [];
+  const add = (effort, action, why, points, pillar) =>
+    w.push({ effort, action, why, points: Math.max(0, Math.round(points)), pillar });
+
+  if (s.starBlocked) add("today", "Remove the wildcard block in robots.txt",
+    "robots.txt turns away every crawler, so no engine can read this site at all.",
+    20 - s.pillars.access, "crawler access");
+  else if ((s.named || []).length) add("today",
+    "Allow " + s.named.join(", ") + " in robots.txt",
+    "These crawlers are refused today while a normal browser gets in.",
+    20 - s.pillars.access, "crawler access");
+
+  if (!s.hasOrg) add("today", "Add Organization schema to the homepage",
+    "Nothing machine-readable says what this business is, so engines have to guess.", 5, "entity");
+  else if (!s.hasAddress) add("today", "Add a postal address to the Organization schema",
+    "The schema exists but does not say where this business operates.", 3, "entity");
+  if (!s.llmsPresent) add("today", "Publish /llms.txt",
+    "A short file telling engines what you do and which pages matter. Fifteen minutes.", 2, "technical");
+  else if (!s.llmsUseful) add("today", "Fill in /llms.txt - it exists but is effectively empty",
+    "The file is being served but carries nothing an engine can use.", 1, "technical");
+  if (!s.hasMetaDesc) add("today", "Add a meta description to the homepage",
+    "Engines frequently quote it verbatim when summarising a business.", 2, "technical");
+  if (!s.hasTitle) add("today", "Add a page title", "There is no title tag to name you with.", 1, "technical");
+  if (!s.hasCanonical) add("today", "Add a canonical tag",
+    "Without one, duplicate URLs split whatever authority you have.", 1, "technical");
+  if (!s.hasSitemap) add("today", "Publish a sitemap.xml",
+    "Crawlers are finding pages by luck rather than by list.", 2, "technical");
+
+  if (cd && cd.targets && cd.targets.length) {
+    const top = cd.targets.slice(0, 3);
+    add("this month",
+      "Get listed in " + top.map(t => t.host).join(", "),
+      "AI cited " + (top[0].host) + " in " + top[0].cited_in + " of " + top[0].of_queries +
+      " buyer questions we asked, and you are not on it. These accept new listings.",
+      Math.min(8, 3 * top.length), "off-site");
+  }
+  if (s.profilesVerified < 2) add("this month",
+    "Claim your profiles and link them back with sameAs",
+    (s.profilesVerified === 1
+      ? "Only one verified profile confirms this business exists anywhere but its own website."
+      : "Nothing outside this website confirms the business exists."), 5, "off-site");
+  if (s.daysSinceUpdate === null || s.daysSinceUpdate > 180) add("this month",
+    "Publish something with a visible date on it",
+    s.daysSinceUpdate === null ? "No dated content found, so engines cannot tell if this site is current."
+      : "Nothing dated in the last " + s.daysSinceUpdate + " days.",
+    10 - s.pillars.freshness, "freshness");
+  if (!s.answerShaped) add("this month",
+    "Add question-shaped headings with a direct answer underneath",
+    (s.questionHeads === 1
+      ? "Only one heading is phrased as a question, so there is little here in a form an engine can lift."
+      : "No headings are phrased as questions, so there is little here in a form an engine can lift."), 4, "content");
+
+  const rank = { today: 0, "this month": 1 };
+  return w.filter(x => x.points > 0 || x.effort === "today")
+          .sort((a, b) => (rank[a.effort] - rank[b.effort]) || (b.points - a.points));
+};
+
 app.post("/api/full-report", async (req, res) => {
   try {
     const { email, domain, name, role } = req.body || {};
@@ -1349,7 +1440,10 @@ app.post("/api/full-report", async (req, res) => {
     // 1) kick off the full n8n audit so the PDF still lands in their inbox.
     //    The scan already scored this site; send those numbers along so the report
     //    explains them rather than grading it a second time and disagreeing.
-    const citeForReport = await getCitationSignal(site).catch(() => null);
+    // Paid, narrow: the three buyer questions this tier is meant to answer.
+    // This call is what makes the report's citation claims measured rather than
+    // inferred - without it the PDF was asserting engine behaviour nobody asked about.
+    const citeForReport = await getCitationSignal(site, false, true, false).catch(() => null);
     const snap = await scoreSnapshot(site, citeForReport).catch(() => null);
     const authoritative = snap && !snap.inconclusive ? {
       total_score: snap.total,
@@ -1366,8 +1460,10 @@ app.post("/api/full-report", async (req, res) => {
       },
       pillar_max: snap.pillarMax,
     } : null;
+    const cd = citationDetail(citeForReport);
     const auditPayload = { name: leadName, email, website_url: site.url,
-                           role: role || "Other", scores: authoritative };
+                           role: role || "Other", scores: authoritative,
+                           citation: cd, quick_wins: quickWins(snap, cd) };
     triggerFullAudit(auditPayload).catch(() => {});
 
     if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) {
@@ -1402,6 +1498,8 @@ app.post("/api/full-report", async (req, res) => {
         return [...f.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
           .map(([host, n]) => ({ host, citedIn: n, ofQueries: c.runs.length }));
       })() : [],
+      citationDetail: cd,
+      quickWins: quickWins(snap, cd),
       freshness: snap ? { daysSinceUpdate: snap.daysSinceUpdate, datedItems: snap.datedItems,
                           sitemapUrls: snap.sitemapUrls } : null,
       pages: snap && snap.deepPages ? snap.deepPages : [],
@@ -1680,6 +1778,7 @@ app.get("/api/deep-scan", async (req, res) => {
         pages,
       },
       citation: { queriesTested: runs.length, queriesWhereCited: citedQueries, runs },
+      quickWins: quickWins(base, citationDetail(cite)),
       competitors, targets, rivals,
       byStage: (() => {
         const g = {};
