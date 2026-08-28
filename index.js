@@ -379,7 +379,8 @@ const getCitationSignal = async (site, force = false, paid = false, wide = false
     for (const q of (paid ? qset : [])) {
       const r = await runCitationFinder(q.query, bare);
       if (!r.error) runs.push({ stage: q.stage, query: q.query, sources: r.total, named: r.inCount,
-        cited: r.sources.slice(0, 8).map(x => ({ host: x.host, you: !!x.appearsYou })) });
+        answerNamed: !!r.namedInAnswer, unknown: r.unknownCount || 0,
+        cited: r.sources.slice(0, 8).map(x => ({ host: x.host, you: x.appearsYou === true })) });
       await new Promise(z => setTimeout(z, 1500));
     }
     const rec = runs.length
@@ -392,7 +393,10 @@ const getCitationSignal = async (site, force = false, paid = false, wide = false
       free,
       runs,
       queriesRun: runs.length,
-      queriesCited: runs.filter(r => r.named > 0).length,
+      // Cited means either the engine named you in the answer, or a source it
+      // leaned on does. Only counting the latter was reporting 0 for businesses
+      // the engines were describing by name.
+      queriesCited: runs.filter(r => r.named > 0 || r.answerNamed).length,
       query: (qset[0] && qset[0].query) || null,
       // unbranded: asked for the best in the category, was this business cited?
       buyerSources: rec.error ? 0 : rec.total,
@@ -927,6 +931,29 @@ const inferBuyerQuery = async (site) => {
   return { query: q, title, city, via: "deterministic" };
 };
 
+// An engine writes the brand, not the URL. Matching only "specularisinc.com"
+// misses every answer that actually names the business, which is the single
+// signal this whole pillar exists to measure.
+// "specularisinc.com" -> ["specularisinc.com", "specularisinc", "specularis"]
+const brandVariants = (bare) => {
+  const out = [bare];
+  const root = bare.split(".")[0];
+  if (root.length >= 4) out.push(root);
+  // Drop a trailing corporate suffix, but only when a real name survives it,
+  // so "co.com" does not degrade into a two-letter match on everything.
+  const trimmed = root.replace(/(inc|llc|corp|co|group|hq|labs|agency|studio|app|io|ai)$/i, "");
+  if (trimmed.length >= 5 && trimmed !== root) out.push(trimmed);
+  return [...new Set(out)];
+};
+
+// Word-boundary matching: "compass" should not fire on "encompassing".
+const mentionsBrand = (text, variants) => {
+  const t = String(text || "");
+  if (!t) return false;
+  return variants.some(v =>
+    new RegExp("\\b" + v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(t));
+};
+
 const runCitationFinder = async (query, domain) => {
   const site = normalizeUrl(domain);
   const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
@@ -975,19 +1002,28 @@ const runCitationFinder = async (query, domain) => {
   }
   const sources = [...byHost.values()];
 
+  const variants = brandVariants(bare);
   await Promise.all(sources.map(async (s) => {
     if (s.host === bare || s.host.endsWith("." + bare)) { s.isYou = true; s.appearsYou = true; return; }
     const f = await fetchWithTimeout(s.url, {}, 8000);
-    s.appearsYou = (f.text || "").toLowerCase().includes(bare);
+    // A page we could not read is unknown, not a miss. Scoring a timeout as
+    // "does not mention you" is the same false negative that once gave Zillow a 0.
+    if (!f.ok || !f.text) { s.appearsYou = null; return; }
+    s.appearsYou = mentionsBrand(f.text, variants);
   }));
 
   const total = sources.length;
-  const inCount = sources.filter((s) => s.appearsYou).length;
+  const inCount = sources.filter((s) => s.appearsYou === true).length;
+  const unknownCount = sources.filter((s) => s.appearsYou === null).length;
   const enginesUsed = [];
   if (pplx && !pplx.error) enginesUsed.push("Perplexity");
   if (claude && !claude.error) enginesUsed.push("Claude");
   const answer = (pplx && !pplx.error && pplx.choices?.[0]?.message?.content) || "";
-  return { query: q, domain: bare, answer: answer.slice(0, 1200), total, inCount, engines: enginesUsed, sources };
+  // The thing a buyer would actually notice: did the engine say your name?
+  // Checked against the full answer, before it is truncated for display.
+  const namedInAnswer = mentionsBrand(answer, variants);
+  return { query: q, domain: bare, answer: answer.slice(0, 1200), total, inCount,
+    unknownCount, namedInAnswer, engines: enginesUsed, sources };
 };
 
 // server identity (surfaced in the MCP handshake + directory listings)
@@ -1625,7 +1661,7 @@ app.get("/api/deep-scan", async (req, res) => {
     const targets = competitors.filter(c => c.joinable);
     const rivals = competitors.filter(c => !c.joinable);
 
-    const citedQueries = runs.filter(r => r.named > 0).length;
+    const citedQueries = runs.filter(r => r.named > 0 || r.answerNamed).length;
 
     const payload = {
       host: bare,
@@ -1647,7 +1683,9 @@ app.get("/api/deep-scan", async (req, res) => {
       byStage: (() => {
         const g = {};
         runs.forEach(r => { const k = r.stage || "other";
-          g[k] = g[k] || { tested: 0, cited: 0 }; g[k].tested++; if (r.named > 0) g[k].cited++; });
+          g[k] = g[k] || { tested: 0, cited: 0, namedInAnswer: 0 }; g[k].tested++;
+          if (r.named > 0 || r.answerNamed) g[k].cited++;
+          if (r.answerNamed) g[k].namedInAnswer++; });
         return g;
       })(),
       freshness: { daysSinceUpdate: base.daysSinceUpdate, datedItems: base.datedItems, sitemapUrls: base.sitemapUrls },
