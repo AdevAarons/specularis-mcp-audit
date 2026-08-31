@@ -61,7 +61,7 @@
 <div class="wrap">
   <h1>Deep AI visibility audit</h1>
   <p class="sub">Ten buyer questions asked directly of the answer engines, twenty-five pages crawled as a real
-    crawler, and every public source that corroborates the business. Takes about two minutes.</p>
+    crawler, and every public source that corroborates the business. Takes two to three minutes.</p>
 
   <form id="runner" onsubmit="return run(event)">
     <input id="d" placeholder="clientdomain.com" autocomplete="off" spellcheck="false" required>
@@ -76,6 +76,7 @@
     <div class="m" id="dom"></div>
     <div class="score" style="margin-top:14px"><b id="big"></b><span class="of">out of 100</span><span class="of" id="grade"></span></div>
     <div class="meta" id="meta"></div>
+    <div id="share"></div>
 
     <h2>Where the score comes from</h2>
     <div id="layers"></div>
@@ -118,7 +119,7 @@ async function run(e){
     const j=await r.json();
     if(j.inconclusive){ err.textContent=j.error; err.style.display='block'; return false; }
     if(!r.ok){ err.textContent=j.error||'That did not complete.'; err.style.display='block'; return false; }
-    render(j); out.style.display='block';
+    render(j); out.style.display='block'; prog.style.display='none'; prog.innerHTML='';
   }catch(_){ err.textContent='Could not complete the audit.'; err.style.display='block'; }
   finally{ clearInterval(tick); prog.style.display='none'; btn.disabled=false; btn.textContent='Run audit →'; }
   return false;
@@ -134,6 +135,33 @@ function render(j){
   document.getElementById('meta').textContent =
     (b.saved ? 'Saved as a baseline. ' : 'Not saved: '+(b.reason||'unknown')+'. ') +
     j.siteWide.pagesTested+' pages crawled · '+j.citation.queriesTested+' buyer questions asked.';
+
+  // The point of running this is the link you send afterwards. It was in the API
+  // response and nowhere on the page, so a run produced an analysis you could read
+  // and nothing you could hand over.
+  const sh = document.getElementById('share');
+  if (sh) sh.innerHTML = j.shareUrl
+    ? '<div class="lay" style="margin:16px 0 4px">'+
+      '<div class="layq" style="margin-bottom:4px">Send this to them</div>'+
+      '<div class="empty" style="margin:0 0 8px">A read-only copy of this report. No key, nothing they can run.</div>'+
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+      '<input id="shareurl" readonly value="'+esc(j.shareUrl)+'" '+
+      'style="flex:1;min-width:240px;background:transparent;border:1px solid #2a2d35;border-radius:6px;'+
+      'padding:9px 11px;color:#c9ccd3;font:inherit;font-size:13px">'+
+      '<button type="button" id="copyshare" style="background:#2467E3;color:#fff;border:0;border-radius:6px;'+
+      'padding:10px 16px;font:inherit;font-weight:600;cursor:pointer">Copy link</button>'+
+      '</div></div>'
+    : ((j.baseline && j.baseline.saved === false)
+        ? '<div class="empty" style="margin:14px 0">No share link: '+esc(j.baseline.reason||'baseline not saved')+'</div>'
+        : '');
+  const cb = document.getElementById('copyshare');
+  if (cb) cb.onclick = function(){
+    const el = document.getElementById('shareurl');
+    el.select(); el.setSelectionRange(0, 99999);
+    const done = function(){ cb.textContent='Copied'; setTimeout(function(){ cb.textContent='Copy link'; },1800); };
+    if (navigator.clipboard) navigator.clipboard.writeText(el.value).then(done, done);
+    else { try { document.execCommand('copy'); } catch(e){} done(); }
+  };
 
   const order=[['offsite','Being cited elsewhere'],['access','Getting in'],['entity','Knowing who you are'],
                ['content','Something worth quoting'],['freshness','Signs of life'],['technical','Technical foundation']];
