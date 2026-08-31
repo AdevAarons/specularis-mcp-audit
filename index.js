@@ -141,6 +141,71 @@ const isJoinable = (host) => {
 
 // Persist a deep audit as a baseline. Railway's disk resets on deploy, so a
 // benchmark someone signed against has to live somewhere real.
+// A share link points at one saved audit and nothing else. The signature covers
+// the Notion page id, so a link cannot be edited to reveal another prospect's
+// report, and holding one grants no ability to run new scans.
+const shareSig = (pageId) =>
+  createHmac("sha256", BADGE_SECRET).update("share|" + pageId).digest("base64url").slice(0, 22);
+
+// Only what the report renders. The full payload carries 25 page probes with
+// word counts and statuses that never reach the screen.
+const sharePayload = (r) => ({
+  host: r.host, measuredAt: r.measuredAt, proxy: r.proxy,
+  total: r.total, grade: r.grade, pillars: r.pillars, pillarMax: r.pillarMax,
+  siteWide: {
+    pagesTested: r.siteWide && r.siteWide.pagesTested,
+    pagesBlocked: r.siteWide && r.siteWide.pagesBlocked,
+    pagesThin: r.siteWide && r.siteWide.pagesThin,
+    pages: ((r.siteWide && r.siteWide.pages) || []).map(p => ({
+      url: p.url, served: p.served, gptbot: { status: p.gptbot && p.gptbot.status } })),
+  },
+  citation: r.citation, targets: r.targets, rivals: r.rivals,
+  quickWins: r.quickWins, suggested: r.suggested, freshness: r.freshness,
+  baseline: { saved: true },
+});
+
+// Notion caps a rich_text value at 2000 characters, so the JSON is split across
+// paragraph blocks and reassembled on read. Keeping it on the baseline page makes
+// the report and the business record one object - delete the row, kill the link.
+const CHUNK = 1800;
+const writeSharePayload = async (pageId, payload) => {
+  const json = JSON.stringify(payload);
+  const chunks = [];
+  for (let i = 0; i < json.length; i += CHUNK) chunks.push(json.slice(i, i + CHUNK));
+  if (chunks.length > 95) return { stored: false, reason: "payload too large" };
+  const res = await fetchWithTimeout("https://api.notion.com/v1/blocks/" + pageId + "/children", {
+    method: "PATCH",
+    headers: { Authorization: "Bearer " + NOTION_TOKEN, "Notion-Version": "2022-06-28", "Content-Type": "application/json" },
+    body: JSON.stringify({ children: chunks.map(c => ({
+      object: "block", type: "paragraph",
+      paragraph: { rich_text: [{ type: "text", text: { content: c } }] },
+    })) }),
+  }, 20000);
+  return res.ok ? { stored: true, chunks: chunks.length }
+                : { stored: false, reason: "notion " + res.status };
+};
+
+const readSharePayload = async (pageId) => {
+  const out = [];
+  let cursor = null;
+  for (let guard = 0; guard < 5; guard++) {
+    const url = "https://api.notion.com/v1/blocks/" + pageId + "/children?page_size=100" +
+      (cursor ? "&start_cursor=" + encodeURIComponent(cursor) : "");
+    const res = await fetchWithTimeout(url, {
+      headers: { Authorization: "Bearer " + NOTION_TOKEN, "Notion-Version": "2022-06-28" },
+    }, 20000);
+    if (!res.ok) return null;
+    let j; try { j = JSON.parse(res.text); } catch (e) { return null; }
+    for (const b of j.results || []) {
+      const rt = b.paragraph && b.paragraph.rich_text;
+      if (rt && rt.length) out.push(rt.map(t => t.plain_text || (t.text && t.text.content) || "").join(""));
+    }
+    if (!j.has_more) break;
+    cursor = j.next_cursor;
+  }
+  try { return JSON.parse(out.join("")); } catch (e) { return null; }
+};
+
 const saveDeepBaseline = async (r) => {
   if (!NOTION_TOKEN || !NOTION_AUDITS_DB) return { saved: false, reason: "notion not configured" };
   const txt = (v) => [{ text: { content: String(v == null ? "" : v).slice(0, 1900) } }];
@@ -173,7 +238,12 @@ const saveDeepBaseline = async (r) => {
       }),
     }, 15000);
     if (!res.ok) return { saved: false, reason: "notion " + res.status + " - is the integration shared with the database?" };
-    return { saved: true };
+    let pageId = null;
+    try { pageId = JSON.parse(res.text).id; } catch (e) {}
+    if (!pageId) return { saved: true, shared: false, reason: "no page id returned" };
+    const stored = await writeSharePayload(pageId, sharePayload(r)).catch(() => ({ stored: false }));
+    return { saved: true, pageId, shared: !!stored.stored,
+             shareUrl: stored.stored ? "/r/" + pageId + "?t=" + shareSig(pageId) : null };
   } catch (e) { return { saved: false, reason: String(e).slice(0, 120) }; }
 };
 
@@ -1218,7 +1288,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "2.2.0",
+  version: "2.3.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -2033,12 +2103,36 @@ app.get("/api/deep-scan", async (req, res) => {
     payload.baseline = String(req.query.save || "1") === "0"
       ? { saved: false, reason: "skipped" }
       : await saveDeepBaseline(payload);
+    // The link you actually send. Absolute, so it can be pasted straight into an email.
+    if (payload.baseline && payload.baseline.shareUrl) {
+      const base = (req.headers["x-forwarded-proto"] || req.protocol || "https") + "://" + req.get("host");
+      payload.shareUrl = base + payload.baseline.shareUrl;
+    }
     res.json(payload);
   } catch (e) { res.status(500).json({ error: "deep scan failed: " + String(e).slice(0, 160) }); }
 });
 
 // Private deep-audit page. Key-gated, noindex, meant to be opened in a prospect
 // meeting or sent to someone who has booked one.
+// The shared report. No key, no domain input, no way to run a scan - it renders
+// one saved audit and nothing else. Signature is verified before Notion is touched,
+// so a bad link costs nothing.
+app.get("/r/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    if (!/^[0-9a-fA-F-]{32,40}$/.test(id)) return res.status(404).send("Not found");
+    if (shareSig(id) !== String(req.query.t || "")) return res.status(401).send("This link is not valid.");
+    if (!NOTION_TOKEN) return res.status(503).send("Reports are not available right now.");
+    const payload = await readSharePayload(id);
+    if (!payload) return res.status(404).send("That report is no longer available.");
+    if (!DEEP_HTML) return res.status(404).send("Not found");
+    const inject = "<script>window.__REPORT__ = " +
+      JSON.stringify(payload).replace(/</g, "\\u003c") + ";</script>";
+    res.set("X-Robots-Tag", "noindex, nofollow").type("html")
+       .send(DEEP_HTML.replace("</head>", inject + "</head>"));
+  } catch (e) { res.status(500).send("Could not load that report."); }
+});
+
 app.get("/deep", (req, res) => {
   if (DEEP_KEY && req.query.k !== DEEP_KEY) return res.status(401).send("Unauthorized");
   if (!DEEP_HTML) return res.status(404).send("Not found");

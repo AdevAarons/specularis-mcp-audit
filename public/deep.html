@@ -63,11 +63,11 @@
   <p class="sub">Ten buyer questions asked directly of the answer engines, twenty-five pages crawled as a real
     crawler, and every public source that corroborates the business. Takes about two minutes.</p>
 
-  <form onsubmit="return run(event)">
+  <form id="runner" onsubmit="return run(event)">
     <input id="d" placeholder="clientdomain.com" autocomplete="off" spellcheck="false" required>
     <button id="btn" type="submit">Run audit &rarr;</button>
   </form>
-  <p class="note">Private page. Every run is saved as a dated baseline.</p>
+  <p class="note" id="runnote">Private page. Every run is saved as a dated baseline.</p>
 
   <div class="prog" id="prog"></div>
   <p class="err" id="err"></p>
@@ -197,6 +197,26 @@ function render(j){
     'Freshness: '+(fr.daysSinceUpdate==null?'nothing on the site carries a date':'last dated item '+fr.daysSinceUpdate+' days old')+
     ' · '+(fr.datedItems||0)+' dated items across '+(fr.sitemapUrls||0)+' sitemap URLs. '+
     'Off-site is scored on whether the engines cite this business for real buyer questions, weighted heaviest because it is the only pillar that predicts citation.';
+}
+
+// Read-only mode. The server injects one saved audit as window.__REPORT__ on a
+// signed /r/<id> link: no scan is offered, nothing is fetched, and there is no key
+// on the page for a recipient to reuse.
+if (window.__REPORT__) {
+  var f = document.getElementById('runner'); if (f) f.remove();
+  var rn = document.getElementById('runnote'); if (rn) rn.remove();
+  var h = document.querySelector('h1'); if (h) h.textContent = 'AI visibility baseline';
+  var sub = document.querySelector('.sub');
+  if (sub) sub.textContent = 'Measured directly against the answer engines: ten buyer questions asked, ' +
+    'twenty-five pages crawled as a real crawler, and every public source that corroborates the business. ' +
+    'This is the starting line, and the same questions get re-asked to show movement.';
+  try {
+    render(window.__REPORT__);
+    document.getElementById('out').style.display = 'block';
+  } catch (e) {
+    var er = document.getElementById('err');
+    er.textContent = 'This report could not be displayed.'; er.style.display = 'block';
+  }
 }
 </script>
 </body>
