@@ -137,17 +137,34 @@ function render(j){
 
   const order=[['offsite','Being cited elsewhere'],['access','Getting in'],['entity','Knowing who you are'],
                ['content','Something worth quoting'],['freshness','Signs of life'],['technical','Technical foundation']];
-  document.getElementById('layers').innerHTML = order.map(([k,label])=>{
+  const an = j.analysis || {};
+  const ap = an.pillars || {};
+  document.getElementById('layers').innerHTML =
+    (an.headline ? '<p class="sub" style="margin:0 0 18px">'+esc(an.headline)+'</p>' : '') +
+    order.map(([k,label])=>{
     const got=P[k]||0, max=M[k]||20, pct=Math.round(got/max*100);
+    const a = ap[k] || {};
     return '<div class="lay"><div class="layhead"><span class="layq">'+label+'</span>'+
       '<span class="layn" style="color:'+col(pct)+'">'+got+' / '+max+'</span></div>'+
-      '<div class="bar"><span style="width:'+pct+'%;background:'+col(pct)+'"></span></div></div>';
+      '<div class="bar"><span style="width:'+pct+'%;background:'+col(pct)+'"></span></div>'+
+      (a.finding ? '<div class="empty" style="margin:8px 0 0;color:#c9ccd3">'+esc(a.finding)+'</div>' : '')+
+      (a.fix ? '<div class="empty" style="margin:5px 0 0"><b style="color:#e8eaee">Fix:</b> '+esc(a.fix)+'</div>' : '')+
+      '</div>';
   }).join('');
 
-  document.getElementById('queries').innerHTML = (j.citation.runs||[]).map(r=>
-    '<tr><td class="tag">'+esc(r.stage||'')+'</td><td class="q">'+esc(r.query)+'</td>'+
-    '<td class="n"><span class="'+(r.named>0?'hit':'miss')+'">'+r.named+'</span> / '+r.sources+'</td></tr>').join('')
-    || '<tr><td colspan="3" class="empty">No questions completed.</td></tr>';
+  // The count alone proves nothing to a sceptic. The answer does.
+  document.getElementById('queries').innerHTML = (j.citation.runs||[]).map(r=>{
+    const you = (r.named>0 || r.answerNamed);
+    const rivals = (r.cited||[]).filter(c=>!c.you).map(c=>c.host).slice(0,4);
+    return '<tr><td class="tag" style="vertical-align:top">'+esc(r.stage||'')+'</td>'+
+      '<td class="q"><div>'+esc(r.query)+'</div>'+
+      (r.answer ? '<div class="empty" style="margin:6px 0 0;color:#a9adb6;font-style:italic">&#8220;'+
+        esc(String(r.answer).slice(0,280).replace(/\s+\S*$/,''))+'&#8230;&#8221;</div>' : '')+
+      (rivals.length ? '<div class="empty" style="margin:4px 0 0">it cited '+esc(rivals.join(', '))+'</div>' : '')+
+      '</td>'+
+      '<td class="n" style="vertical-align:top"><span class="'+(you?'hit':'miss')+'">'+
+      (you?'you':'not you')+'</span></td></tr>';
+  }).join('') || '<tr><td colspan="3" class="empty">No questions completed.</td></tr>';
 
   // Where they could stand, alongside where they do.
   const sug=j.suggested||[];
@@ -160,10 +177,15 @@ function render(j){
 
   // One list. Site fixes and listings are the same thing to whoever has to do them.
   const tasks=(j.quickWins||[]).map(w=>({speed:w.effort,what:w.action,why:w.why,pts:w.points}));
-  (j.targets||[]).slice(0,4).forEach(x=>tasks.push({
-    speed:'this month', what:'Get onto '+x.host,
-    why:'Cited in '+x.citedIn+' of '+x.ofQueries+' questions and accepts new entries.',
-    pts:Math.min(6,2*x.citedIn) }));
+  // The scan already emits a combined "Get listed in a, b, c" item. Adding one per
+  // host repeated the same instruction twice on the page.
+  const named = tasks.map(t=>String(t.what).toLowerCase()).join(' ');
+  (j.targets||[]).slice(0,4).forEach(x=>{
+    if (named.includes(x.host.toLowerCase())) return;
+    tasks.push({ speed:'this month', what:'Get onto '+x.host,
+      why:'Cited in '+x.citedIn+' of '+x.ofQueries+' questions and accepts new entries.',
+      pts:Math.min(6,2*x.citedIn) });
+  });
   const rank={today:0,'this month':1};
   tasks.sort((a,b)=>(rank[a.speed]-rank[b.speed])||(b.pts-a.pts));
   const group=(label,items)=>items.length
@@ -183,7 +205,9 @@ function render(j){
                   : '<div class="empty">Nothing measurable to act on from this scan.</div>') + rivalNote;
 
   const sw=j.siteWide;
-  const bad=(sw.pages||[]).filter(p=>!p.served);
+  // Only pages a crawler was turned away from. A 404 answering 404 is correct,
+  // and listing it here read as a finding when it is not one.
+  const bad=(sw.pages||[]).filter(p=>p.refused);
   document.getElementById('pages').innerHTML =
     '<div class="lay"><div class="layhead"><span class="layq">'+sw.pagesTested+' pages crawled</span>'+
     '<span class="layn" style="color:'+(sw.pagesBlocked?'var(--fail)':'var(--good)')+'">'+

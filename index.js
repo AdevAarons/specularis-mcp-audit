@@ -141,6 +141,60 @@ const isJoinable = (host) => {
 
 // Persist a deep audit as a baseline. Railway's disk resets on deploy, so a
 // benchmark someone signed against has to live somewhere real.
+// The paid report was thinner than the free one: numbers with no reasoning.
+// One call turns the measurements into a finding and a fix per pillar. It is fed
+// only what was measured, and told to say so when a pillar has nothing wrong -
+// a report that invents problems on a clean pillar is worse than no report.
+const deepAnalysis = async (p) => {
+  if (!ANTHROPIC_API_KEY) return null;
+  const runs = (p.citation && p.citation.runs) || [];
+  const facts = {
+    domain: p.host,
+    score: p.total, grade: p.grade,
+    pillars: p.pillars, pillar_max: p.pillarMax,
+    questions_asked: runs.length,
+    questions_naming_you: runs.filter(r => r.named > 0 || r.answerNamed).length,
+    questions: runs.slice(0, 10).map(r => ({
+      query: r.query, stage: r.stage,
+      named_you: !!(r.named > 0 || r.answerNamed),
+      sources_cited: r.sources,
+      who_was_cited: (r.cited || []).map(c => c.host).slice(0, 6),
+    })),
+    directories_you_could_join: (p.targets || []).map(t => t.host + " (cited in " + t.citedIn + " of " + t.ofQueries + ")"),
+    competitors_being_cited: (p.rivals || []).slice(0, 8).map(t => t.host + " (cited in " + t.citedIn + " of " + t.ofQueries + ")"),
+    pages_crawled: p.siteWide && p.siteWide.pagesTested,
+    pages_refused_to_crawlers: p.siteWide && p.siteWide.pagesBlocked,
+    pages_thin_for_crawlers: p.siteWide && p.siteWide.pagesThin,
+    days_since_dated_content: p.freshness && p.freshness.daysSinceUpdate,
+  };
+  const prompt =
+    "You are writing the analysis section of an AI-visibility audit for a business owner.\n\n" +
+    "MEASURED FACTS (the only thing you may assert):\n" + JSON.stringify(facts) + "\n\n" +
+    "Write JSON only, no prose outside it:\n" +
+    '{"headline":"<one sentence: the single most important thing this measurement shows>",' +
+    '"pillars":{"offsite":{"finding":"","fix":""},"access":{"finding":"","fix":""},' +
+    '"entity":{"finding":"","fix":""},"content":{"finding":"","fix":""},' +
+    '"freshness":{"finding":"","fix":""},"technical":{"finding":"","fix":""}}}' + "\n\n" +
+    "Rules. Cite the numbers you were given and never invent one. Where a pillar is at or near " +
+    "full marks, say plainly that it is fine and that no work is needed - do not manufacture a " +
+    "problem. Name the actual competitors and directories from the facts. Two or three sentences " +
+    "per finding, one or two per fix. Address the reader as you. No marketing language.";
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 3000,
+        thinking: { type: "disabled" },
+        messages: [{ role: "user", content: prompt }] }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const txt = (j.content || []).filter(b => b.type === "text").map(b => b.text).join(" ");
+    const m = txt.match(/\{[\s\S]*\}/);
+    return m ? JSON.parse(m[0]) : null;
+  } catch (e) { return null; }
+};
+
 // A share link points at one saved audit and nothing else. The signature covers
 // the Notion page id, so a link cannot be edited to reveal another prospect's
 // report, and holding one grants no ability to run new scans.
@@ -156,10 +210,13 @@ const sharePayload = (r) => ({
     pagesTested: r.siteWide && r.siteWide.pagesTested,
     pagesBlocked: r.siteWide && r.siteWide.pagesBlocked,
     pagesThin: r.siteWide && r.siteWide.pagesThin,
+    // refused and dead are different findings: a crawler turned away is a problem,
+    // a 404 is sitemap hygiene. Without both flags the report listed /404 as a block.
     pages: ((r.siteWide && r.siteWide.pages) || []).map(p => ({
-      url: p.url, served: p.served, gptbot: { status: p.gptbot && p.gptbot.status } })),
+      url: p.url, served: p.served, refused: !!p.refused, dead: !!p.dead, thin: !!p.thin,
+      gptbot: { status: p.gptbot && p.gptbot.status } })),
   },
-  citation: r.citation, targets: r.targets, rivals: r.rivals,
+  citation: r.citation, targets: r.targets, rivals: r.rivals, analysis: r.analysis,
   quickWins: r.quickWins, suggested: r.suggested, freshness: r.freshness,
   baseline: { saved: true },
 });
@@ -621,6 +678,10 @@ const getCitationSignal = async (site, force = false, paid = false, wide = false
       const r = await runCitationFinder(q.query, bare);
       if (!r.error) runs.push({ stage: q.stage, query: q.query, sources: r.total, named: r.inCount,
         answerNamed: !!r.namedInAnswer, unknown: r.unknownCount || 0,
+        // The sentence the engine actually produced. Reading a prospect the line
+        // where a rival gets recommended and they do not is the whole argument,
+        // and throwing it away left the report showing only a count.
+        answer: String(r.answer || "").slice(0, 600),
         cited: r.sources.slice(0, 8).map(x => ({ host: x.host, you: x.appearsYou === true })) });
       await new Promise(z => setTimeout(z, 1500));
     }
@@ -1288,7 +1349,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "2.4.0",
+  version: "2.5.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -2104,6 +2165,7 @@ app.get("/api/deep-scan", async (req, res) => {
       })(),
       freshness: { daysSinceUpdate: base.daysSinceUpdate, datedItems: base.datedItems, sitemapUrls: base.sitemapUrls },
     };
+    payload.analysis = await deepAnalysis(payload).catch(() => null);
     payload.baseline = String(req.query.save || "1") === "0"
       ? { saved: false, reason: "skipped" }
       : await saveDeepBaseline(payload);
