@@ -152,7 +152,7 @@ function render(j){
   // Where they could stand, alongside where they do.
   const sug=j.suggested||[];
   document.getElementById('suggest').innerHTML = sug.length
-    ? '<div class="lay"><div class="layq" style="margin-bottom:6px">Five more you could win</div>'+
+    ? '<div class="lay"><div class="layq" style="margin-bottom:6px">'+(sug.length===1?'One more you could win':sug.length+' more you could win')+'</div>'+
       '<div class="empty" style="margin:0 0 8px">Narrower questions, answered by far fewer pages, so less has to be displaced for you to appear.</div>'+
       sug.map(q=>'<div style="margin:8px 0"><div class="q">'+esc(q.query)+'</div>'+
         (q.why?'<div class="empty" style="margin:2px 0 0">'+esc(q.why)+'</div>':'')+'</div>').join('')+'</div>'
@@ -190,7 +190,7 @@ function render(j){
     sw.pagesBlocked+' refused · '+sw.pagesThin+' thin</span></div></div>' +
     (bad.length ? '<table><tbody>'+bad.slice(0,10).map(p=>
       '<tr><td class="q">'+esc(String(p.url).replace(/^https?:\/\/(www\.)?/,''))+'</td>'+
-      '<td class="n">HTTP '+p.gptbot.status+'</td></tr>').join('')+'</tbody></table>' : '');
+      '<td class="n">HTTP '+((p.gptbot&&p.gptbot.status)||'-')+'</td></tr>').join('')+'</tbody></table>' : '');
 
   const fr=j.freshness||{};
   document.getElementById('foot').textContent =
