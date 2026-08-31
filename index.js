@@ -1288,7 +1288,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "2.3.0",
+  version: "2.4.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -1602,7 +1602,11 @@ const citationDetail = (cite) => {
     if (x.you) return;
     freq.set(x.host, (freq.get(x.host) || 0) + 1);
   }));
-  const ranked = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)
+  // Rank everything before splitting. Truncating first drops the directories a
+  // business can actually join whenever rivals hold the top slots - which is the
+  // normal case for a business that is not yet cited, and exactly when the target
+  // list matters most.
+  const ranked = [...freq.entries()].sort((a, b) => b[1] - a[1])
     .map(([host, c]) => ({ host, cited_in: c, of_queries: runs.length,
       type: classifySource("https://" + host), joinable: isJoinable(host) }));
   return {
@@ -1614,8 +1618,8 @@ const citationDetail = (cite) => {
       sources_mentioning_you: r.named,
       cited_sources: (r.cited || []).map(x => x.host).slice(0, 8),
     })),
-    targets: ranked.filter(x => x.joinable),
-    rivals: ranked.filter(x => !x.joinable),
+    targets: ranked.filter(x => x.joinable).slice(0, 8),
+    rivals: ranked.filter(x => !x.joinable).slice(0, 8),
   };
 };
 
