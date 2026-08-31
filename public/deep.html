@@ -115,7 +115,10 @@ async function run(e){
   let i=0; prog.innerHTML='<b>'+steps[0]+'</b>';
   const tick=setInterval(()=>{ i=Math.min(i+1,steps.length-1); prog.innerHTML='<b>'+steps[i]+'</b>'; }, 18000);
   try{
-    const r=await fetch('/api/deep-scan?d='+encodeURIComponent(d)+(KEY?'&k='+encodeURIComponent(KEY):''));
+    // The unlock cookie carries the authorisation; same-origin fetch sends it.
+    // ?k= stays supported only for anything already scripted against the API.
+    const r=await fetch('/api/deep-scan?d='+encodeURIComponent(d)+(KEY?'&k='+encodeURIComponent(KEY):''),
+      { credentials:'same-origin' });
     const j=await r.json();
     if(j.inconclusive){ err.textContent=j.error; err.style.display='block'; return false; }
     if(!r.ok){ err.textContent=j.error||'That did not complete.'; err.style.display='block'; return false; }

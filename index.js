@@ -1349,7 +1349,7 @@ const runCitationFinder = async (query, domain) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "2.6.0",
+  version: "2.7.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -2089,7 +2089,7 @@ app.get("/stats-bar", (_req, res) => {
 
 // Deep audit API — key-gated, expensive, for prospect meetings and signing baselines
 app.get("/api/deep-scan", async (req, res) => {
-  if (DEEP_KEY && req.query.k !== DEEP_KEY) return res.status(401).json({ error: "Unauthorized" });
+  if (!deepAuthorised(req)) return res.status(401).json({ error: "Unauthorized" });
   const site = normalizeUrl(String(req.query.d || ""));
   if (!site) return res.status(400).json({ error: "Give me a domain" });
   try {
@@ -2180,6 +2180,59 @@ app.get("/api/deep-scan", async (req, res) => {
 
 // Private deep-audit page. Key-gated, noindex, meant to be opened in a prospect
 // meeting or sent to someone who has booked one.
+// A key in the query string ends up in browser history, bookmarks, server logs
+// and anything screen-shared during a meeting. Unlock once, hold a signed
+// httpOnly cookie, and keep the bookmark clean.
+const DEEP_COOKIE = "spec_deep";
+const deepToken = () =>
+  createHmac("sha256", BADGE_SECRET).update("deep-session|" + DEEP_KEY).digest("base64url").slice(0, 32);
+
+const readCookie = (req, name) => {
+  const raw = req.headers.cookie || "";
+  for (const part of raw.split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return "";
+};
+
+// Either proof is accepted: the cookie, or ?k= for anything already scripted
+// against this endpoint.
+const deepAuthorised = (req) => {
+  if (!DEEP_KEY) return true;
+  if (String(req.query.k || "") === DEEP_KEY) return true;
+  return readCookie(req, DEEP_COOKIE) === deepToken();
+};
+
+const setDeepCookie = (res) =>
+  res.cookie
+    ? res.cookie(DEEP_COOKIE, deepToken(), { httpOnly: true, secure: true, sameSite: "lax", maxAge: 30 * 864e5 })
+    : res.set("Set-Cookie", DEEP_COOKIE + "=" + deepToken() +
+        "; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=" + 30 * 86400);
+
+const UNLOCK_HTML = `<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Specularis</title>
+<style>body{background:#0d0e12;color:#e8eaee;font:16px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
+form{width:min(400px,90vw)}h1{font-size:20px;margin:0 0 6px}p{color:#8c919b;font-size:14px;margin:0 0 18px}
+input{width:100%;box-sizing:border-box;background:transparent;border:1px solid #2a2d35;border-radius:8px;
+padding:12px 14px;color:#e8eaee;font:inherit;font-size:15px}
+button{margin-top:12px;width:100%;background:#2467E3;color:#fff;border:0;border-radius:8px;padding:12px;
+font:inherit;font-weight:600;cursor:pointer}.e{color:#e8705c;font-size:13px;margin-top:10px}</style>
+<form method="POST" action="/deep/unlock">
+<h1>Deep audit</h1><p>Private tool. Unlock once on this device.</p>
+<input type="password" name="key" placeholder="Access key" autofocus autocomplete="current-password">
+<button type="submit">Unlock</button>__ERR__</form>`;
+
+app.post("/deep/unlock", express.urlencoded({ extended: false }), (req, res) => {
+  const given = String((req.body && req.body.key) || "");
+  if (!DEEP_KEY || given !== DEEP_KEY) {
+    return res.status(401).type("html").send(UNLOCK_HTML.replace("__ERR__", '<div class="e">That key was not accepted.</div>'));
+  }
+  setDeepCookie(res);
+  res.redirect(302, "/deep");
+});
+
 // The shared report. No key, no domain input, no way to run a scan - it renders
 // one saved audit and nothing else. Signature is verified before Notion is touched,
 // so a bad link costs nothing.
@@ -2200,7 +2253,9 @@ app.get("/r/:id", async (req, res) => {
 });
 
 app.get("/deep", (req, res) => {
-  if (DEEP_KEY && req.query.k !== DEEP_KEY) return res.status(401).send("Unauthorized");
+  if (!deepAuthorised(req)) return res.status(401).type("html").send(UNLOCK_HTML.replace("__ERR__", ""));
+  // Arriving with ?k= exchanges it for the cookie so the key stops travelling in URLs.
+  if (String(req.query.k || "") === DEEP_KEY) { setDeepCookie(res); return res.redirect(302, "/deep"); }
   if (!DEEP_HTML) return res.status(404).send("Not found");
   res.set("X-Robots-Tag", "noindex, nofollow").type("html").send(DEEP_HTML);
 });
