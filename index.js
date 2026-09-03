@@ -52,6 +52,10 @@ let PRICING_SWITCHER_HTML = "";
 try { PRICING_SWITCHER_HTML = readFileSync(join(__dirname, "public", "pricing-switcher.html"), "utf8"); } catch (e) {}
 let SAVAGE_FLIGHT_HTML = "";
 try { SAVAGE_FLIGHT_HTML = readFileSync(join(__dirname, "public", "savage-flight.html"), "utf8"); } catch (e) {}
+let PAVILION_HTML = "";
+try { PAVILION_HTML = readFileSync(join(__dirname, "public", "pavilion-construction.html"), "utf8"); } catch (e) {}
+let CATMAN_HTML = "";
+try { CATMAN_HTML = readFileSync(join(__dirname, "public", "catman.html"), "utf8"); } catch (e) {}
 // Brand assets (served for schema logo/image + og); binary buffers loaded once
 let LOGO_PNG = null, HEADSHOT_PNG = null;
 try { LOGO_PNG = readFileSync(join(__dirname, "public", "assets", "specularis-logo.png")); } catch (e) {}
@@ -752,6 +756,44 @@ const robotsBlocks = (robotsText, ua) => {
   return disallowRoot && !allowRoot;
 };
 
+// ---- Content substance: does the site answer buyer PAINS, or describe itself? ----
+// The format checks below (question headings, FAQ schema) tell you a page COULD be
+// quoted. They do not tell you it answers anything a buyer actually asks. A site can
+// be perfectly structured and still be forty pages about itself, which is the most
+// common reason a well-built site never gets cited: engines answer pain-shaped
+// questions from pain-shaped pages, and there is nothing to reach for.
+//
+// We classify from URL slugs in the sitemap we have already fetched, so this costs
+// no extra requests. Slugs are unusually honest: /why-isnt-my-site-ranking is a
+// different promise from /pricing, and no amount of markup changes that.
+const PAIN_RX = [
+  /\bwhy (is|isnt|is not|am|are|arent|are not|cant|can t|cannot|wont|will not|does|doesnt|does not|do|dont|no|nobody|nothing)\b/,
+  /\b(not|isnt|arent|never|stopped) (showing|shown|ranking|appearing|working|getting|converting|found|indexed|cited|recommended)\b/,
+  /\bhow (do|to) (i|we|you) (fix|stop|get|know|tell|find|check|see|avoid)\b/,
+  /\bhow to (fix|stop|get|know|tell|find|check|see|avoid|prevent|recover|handle|deal)\b/,
+  /\bwhat to do (when|if)\b/,
+  /\b(problem|problems|mistake|mistakes|struggling|losing|failing|failed|stuck|troubleshoot|wrong|broken|dropping|declining|invisible|blocked|blocking|ignored|missing)\b/,
+  /\bmy (business|site|website|company|firm|store|brand|traffic|listing|listings|rankings|team|content)\b/,
+  /\b(competitor|competitors|competition)\b/,
+  /\bno (clicks|traffic|leads|calls|customers|results|visibility)\b/,
+];
+const PRODUCT_RX = [
+  /\b(pricing|prices|plans|packages|features|solutions|our team|about us|contact us|careers|portfolio|testimonials|book a demo|get started|sign up|log in|login)\b/,
+  /^(about|team|contact|pricing|plans|services|service|work|clients|home|index|blog|news|privacy|terms|legal|faq|shop|store|cart|account)$/,
+];
+
+// pain | product | other. "other" is neutral, not bad: a study or a guide that does
+// not use pain phrasing still earns its points through the answer-shape checks.
+const classifyPageIntent = (u) => {
+  let path = "";
+  try { path = decodeURIComponent(new URL(u).pathname); } catch (e) { path = String(u || ""); }
+  const slug = path.replace(/\.(html?|php|aspx?)$/i, "").replace(/[\/\-_+]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  if (!slug) return "other";                       // homepage
+  if (PAIN_RX.some(r => r.test(slug))) return "pain";
+  if (PRODUCT_RX.some(r => r.test(slug))) return "product";
+  return "other";
+};
+
 const scoreSnapshot = async (site, cite = null) => {
   const [robots, browser, llms, sitemap] = await Promise.all([
     fetchWithTimeout(site.origin + "/robots.txt"),
@@ -840,6 +882,26 @@ const scoreSnapshot = async (site, cite = null) => {
   const deepUnknown = deepPages.filter(x => x.unknown);
   const hasCanonical = /<link[^>]+rel=["']canonical["']/i.test(src);
 
+  // ---- Problem-space coverage ----
+  // Reuses the sitemap already in hand. Falls back to same-host links on the
+  // homepage so a site without a sitemap is still measured rather than assumed.
+  let intentPool = smLocs.slice(0, 300);
+  if (intentPool.length < 5) {
+    const hrefs = [...src.matchAll(/<a[^>]+href=["']([^"'#\s]+)["']/gi)].map(x => x[1]);
+    intentPool = [...new Set(hrefs.map(h => { try { return new URL(h, site.url).href.split("#")[0]; } catch (e) { return null; } })
+      .filter(u => { try { return u && new URL(u).host.replace(/^www\./, "") === site.host.replace(/^www\./, ""); } catch (e) { return false; } }))]
+      .filter(u => u.replace(/\/$/, "") !== site.url.replace(/\/$/, ""))
+      .slice(0, 120);
+  }
+  const intent = { pain: 0, product: 0, other: 0 };
+  intentPool.forEach(u => { intent[classifyPageIntent(u)]++; });
+  const painPages = intent.pain;
+  // Denominator excludes product pages on purpose: the question is what share of the
+  // pages that could answer something actually answer a problem.
+  const answerablePages = intent.pain + intent.other;
+  const painShare = answerablePages > 0 ? painPages / answerablePages : 0;
+  const painSampled = intentPool.length;
+
   // Freshness. Engines lean hard on recently-updated sources, and most sites that
   // score well on the other pillars turn out to be three years stale. All of this
   // comes from bytes we already fetched, so it costs nothing.
@@ -896,12 +958,28 @@ const scoreSnapshot = async (site, cite = null) => {
   if (hasAddress) pEntity += 2;
   if (verifiedProfiles >= 2) pEntity += 3; else if (verifiedProfiles === 1) pEntity += 1;
 
+  // Problem-space coverage, 5 of the 15 content points. Length and answer-shape were
+  // previously the whole pillar, which meant a long, well-marked-up page about your
+  // own services scored the same as a page answering the question a buyer typed.
+  // Those two sites do not get cited at the same rate, so they should not score alike.
+  let pPain = 0;
+  if (painPages >= 8) pPain = 5;
+  else if (painPages >= 4) pPain = 4;
+  else if (painPages >= 2) pPain = 2;
+  else if (painPages >= 1) pPain = 1;
+  // A small site that is mostly problem-first beats a large one with a token FAQ.
+  if (pPain > 0 && pPain < 5 && painShare >= 0.2) pPain = Math.min(5, pPain + 1);
+
   let pContent = 0;                                  // out of 15
-  if (botBest >= 1200) pContent += 6; else if (botBest >= 600) pContent += 4;
-  else if (botBest >= 250) pContent += 3; else if (botBest >= 60) pContent += 1;
-  if (answerShaped) pContent += 5;
-  if (headings.length >= 3) pContent += 2;
-  if (!renderGap && botBest >= 250) pContent += 2;
+  // Volume still counts, but less than it did. A longer page about yourself is not
+  // a more citable page, so points moved from raw length onto what the pages answer.
+  if (botBest >= 1200) pContent += 4; else if (botBest >= 600) pContent += 3;
+  else if (botBest >= 250) pContent += 2; else if (botBest >= 60) pContent += 1;
+  if (answerShaped) pContent += 4;
+  if (headings.length >= 3) pContent += 1;
+  if (!renderGap && botBest >= 250) pContent += 1;
+  pContent += pPain;
+  pContent = Math.min(15, pContent);
 
   // Off-site is scored on whether the engines actually cite this business, not on
   // whether it links to its own profiles. Unbranded discovery carries most of the
@@ -991,6 +1069,11 @@ const scoreSnapshot = async (site, cite = null) => {
     deepPages: deepPages.map(x => ({ url: x.url, served: x.served, refused: x.refused,
                                      unknown: x.unknown, status: x.status, words: x.words })),
     hasCanonical, hasMetaDesc, hasTitle, answerShaped, questionHeads,
+    // Problem-space coverage: the share of answerable pages that answer a buyer's
+    // problem rather than describe the business. Drives 5 of the 15 content points.
+    painPages, painShare: Math.round(painShare * 100) / 100, painSampled,
+    pageIntent: intent, painPoints: pPain,
+    painExamples: intentPool.filter(u => classifyPageIntent(u) === "pain").slice(0, 5),
     profilesDeclared: profiles.length, profilesVerified: verifiedProfiles, sameAs: profiles,
     offsiteMeasured, citation: cite || null,
     corroboration: cite && cite.free ? cite.free : null,
@@ -1559,6 +1642,18 @@ app.get("/hero-preview", (_req, res) => {
 app.get("/savage-flight", (_req, res) => {
   if (!SAVAGE_FLIGHT_HTML) return res.status(404).send("Not found");
   res.type("html").send(SAVAGE_FLIGHT_HTML);
+});
+
+// Client scoreboard — Pavilion Construction
+app.get("/pavilion-construction", (_req, res) => {
+  if (!PAVILION_HTML) return res.status(404).send("Not found");
+  res.type("html").send(PAVILION_HTML);
+});
+
+// Client scoreboard — Category Management Association (catman.global)
+app.get("/catman", (_req, res) => {
+  if (!CATMAN_HTML) return res.status(404).send("Not found");
+  res.type("html").send(CATMAN_HTML);
 });
 
 // Copy-source for restoring the Tampa study article body into the Framer CMS
