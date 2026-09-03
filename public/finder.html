@@ -80,6 +80,15 @@
   .src .status{ font-size:11.5px; font-weight:700; padding:4px 11px; border-radius:20px; white-space:nowrap; flex-shrink:0; margin-top:1px; }
   .st-no{ background:var(--red-wash); color:var(--red); } .st-yes{ background:var(--green-wash); color:var(--green); }
 
+  /* headline status: cited (linked, real traffic) vs mentioned (named, no link) vs
+     absent. A mention is not a citation — see /articles/mentioned-by-ai-but-no-clicks
+     — so this gets its own amber state, not folded into red or green. */
+  .r-status{ display:flex; justify-content:center; margin:22px 0 -6px; }
+  .r-status .chip{ font-size:12.5px; font-weight:700; letter-spacing:.02em; padding:7px 16px; border-radius:20px; }
+  .chip-cited{ background:var(--green-wash); color:var(--green); }
+  .chip-mentioned{ background:#FBF1E1; color:#9A6400; }
+  .chip-absent{ background:var(--red-wash); color:var(--red); }
+
   .cta{ margin-top:30px; padding:30px 26px; background:var(--surface); border:1px solid var(--line); border-radius:20px; text-align:center; }
   .cta h3{ font-weight:900; font-size:22px; line-height:1.15; letter-spacing:-.02em; margin-bottom:10px; }
   .cta p{ color:var(--sec); font-size:15px; margin-bottom:20px; max-width:40ch; margin-left:auto; margin-right:auto; }
@@ -146,6 +155,7 @@
       <div class="q" id="r-query"></div>
       <div class="biz" id="r-biz"></div>
     </div>
+    <div class="r-status"><span class="chip" id="r-status"></span></div>
     <div class="gap">
       <div class="big" id="r-gap"></div>
       <div class="sub">of the sources AI cites for this question are ones your business appears in.</div>
@@ -185,6 +195,12 @@
     document.getElementById('r-query').textContent='“'+d.query+'”';
     document.getElementById('r-biz').textContent='Checking for '+d.domain;
     document.getElementById('r-gap').textContent=d.inCount+' / '+d.total;
+    var statusEl=document.getElementById('r-status');
+    var statusCopy={ cited:'Cited — you\'re a linked source', mentioned:'Mentioned, not cited — no link', absent:'Absent from this answer' };
+    var statusCls={ cited:'chip-cited', mentioned:'chip-mentioned', absent:'chip-absent' };
+    var st = d.status || (d.inCount>0 ? 'cited' : (d.namedInAnswer ? 'mentioned' : 'absent'));
+    statusEl.textContent = statusCopy[st] || '';
+    statusEl.className = 'chip ' + (statusCls[st] || '');
     var host=document.getElementById('r-sources'); host.innerHTML='';
     d.sources.forEach(function(s,i){
       var div=document.createElement('div'); div.className='src';

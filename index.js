@@ -70,6 +70,8 @@ const CONTACT_URL = process.env.CONTACT_URL || "https://specularisinc.com/contac
 const AUDIT_URL = process.env.AUDIT_URL || "https://specularisinc.com/free-audit";
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || ""; // set in Railway Variables
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || ""; // set in Railway Variables — adds Claude as a 2nd engine in the citation finder
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ""; // set in Railway Variables — adds Gemini as a 3rd engine in the citation finder
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ""; // set in Railway Variables — adds ChatGPT as a 4th engine in the citation finder
 const NOTION_TOKEN = process.env.NOTION_TOKEN || "";       // Notion internal-integration token — logs finder leads
 const NOTION_LEADS_DB = process.env.NOTION_LEADS_DB || ""; // Notion database id that receives finder leads
 // Deep-audit baselines: one row per run so a signed score can be compared later.
@@ -682,6 +684,11 @@ const getCitationSignal = async (site, force = false, paid = false, wide = false
       const r = await runCitationFinder(q.query, bare);
       if (!r.error) runs.push({ stage: q.stage, query: q.query, sources: r.total, named: r.inCount,
         answerNamed: !!r.namedInAnswer, unknown: r.unknownCount || 0,
+        // linkedCitation/proseMention/status are the cited-vs-mentioned split for
+        // THIS query: did the engine actually link the business, or only name it
+        // with nothing to click. Kept separate from `named`/`answerNamed` above,
+        // which feed the existing off-site score and should not shift meaning.
+        linkedCitation: !!r.linkedCitation, proseMention: !!r.proseMention, status: r.status,
         // The sentence the engine actually produced. Reading a prospect the line
         // where a rival gets recommended and they do not is the whole argument,
         // and throwing it away left the report showing only a count.
@@ -701,8 +708,17 @@ const getCitationSignal = async (site, force = false, paid = false, wide = false
       queriesRun: runs.length,
       // Cited means either the engine named you in the answer, or a source it
       // leaned on does. Only counting the latter was reporting 0 for businesses
-      // the engines were describing by name.
+      // the engines were describing by name. This feeds the off-site score below
+      // and stays as-is; it is deliberately looser than "linked citation."
       queriesCited: runs.filter(r => r.named > 0 || r.answerNamed).length,
+      // The genuinely new metric: of the queries where AI knew about this business
+      // at all (named it OR linked it), what share actually got the link. This is
+      // what separates "AI doesn't know you" from "AI knows you but won't link
+      // you" — two different problems with two different fixes, previously
+      // indistinguishable because linkedCitation/proseMention were computed and
+      // discarded on every single call.
+      queriesLinkedCited: runs.filter(r => r.linkedCitation).length,
+      queriesMentionedOnly: runs.filter(r => r.proseMention).length,
       query: (qset[0] && qset[0].query) || null,
       // unbranded: asked for the best in the category, was this business cited?
       buyerSources: rec.error ? 0 : rec.total,
@@ -716,6 +732,15 @@ const getCitationSignal = async (site, force = false, paid = false, wide = false
       engines: [...new Set([...(ident.engines || []), ...(rec.engines || [])])],
       ok: !rec.error || !ident.error,
     };
+    {
+      const linked = runs.filter(r => r.linkedCitation).length;
+      const mentioned = runs.filter(r => r.proseMention).length;
+      const denom = linked + mentioned;
+      // null, not 0, when AI never knew about the business at all: a 0% conversion
+      // rate reads as "gets mentioned but never linked," which is a different and
+      // better problem than "absent everywhere."
+      v.citationConversionRate = denom > 0 ? Math.round((linked / denom) * 100) : null;
+    }
     CITE_CACHE.set(key, { at: Date.now(), v });
     return Object.assign({}, v, { measuredAt: Date.now(), fromCache: false });
   } catch (e) { return null; }
@@ -1151,15 +1176,82 @@ const callClaude = async (query) => {
 // Pull cited sources out of a Claude Messages response: prefer the citations
 // attached to the answer text (what Claude actually referenced), and fall back
 // to the raw web_search results it retrieved.
+// Claude's response conflates two different things: a page it actually cited in the
+// text (block.citations, attached to a claim it made) and a page it merely retrieved
+// while searching (web_search_tool_result) but never wove into the answer. Only the
+// first is a real citation. Tagging `kind` here is what lets runCitationFinder later
+// tell "AI linked you" apart from "AI's search just happened to touch your domain."
 const extractClaudeSources = (data) => {
   const out = [];
   const content = Array.isArray(data?.content) ? data.content : [];
   for (const block of content) {
     if (block?.type === "text" && Array.isArray(block.citations)) {
-      for (const c of block.citations) if (c?.url) out.push({ url: c.url, title: c.title || "" });
+      for (const c of block.citations) if (c?.url) out.push({ url: c.url, title: c.title || "", kind: "citation" });
     }
     if (block?.type === "web_search_tool_result" && Array.isArray(block.content)) {
-      for (const s of block.content) if (s?.type === "web_search_result" && s.url) out.push({ url: s.url, title: s.title || "" });
+      for (const s of block.content) if (s?.type === "web_search_result" && s.url) out.push({ url: s.url, title: s.title || "", kind: "retrieved" });
+    }
+  }
+  return out;
+};
+
+// Ask Gemini the same buyer query with Google Search grounding on.
+const callGemini = async (query) => {
+  if (!GEMINI_API_KEY) return null;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" + GEMINI_API_KEY, {
+      method: "POST", signal: ctrl.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: query }] }], tools: [{ google_search: {} }] }),
+    });
+    if (!r.ok) return { error: "gemini " + r.status };
+    return await r.json();
+  } catch (e) { return { error: "gemini fetch failed" }; }
+  finally { clearTimeout(t); }
+};
+
+// Gemini's groundingChunks expose the citing DOMAIN (web.title), not a full source URL —
+// synthesize https://<domain> so downstream host-based dedup and fetch checks work the
+// same way they do for Perplexity/Claude/ChatGPT's real URLs.
+const extractGeminiSources = (data) => {
+  const cand = (data?.candidates || [])[0] || {};
+  const chunks = (cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || [];
+  const out = [];
+  for (const c of chunks) {
+    const title = c?.web?.title;
+    if (!title) continue;
+    const url = /^https?:\/\//i.test(title) ? title : "https://" + title;
+    out.push({ url, title, kind: "citation" });
+  }
+  return out;
+};
+
+// Ask ChatGPT the same buyer query with web search on.
+const callChatGPT = async (query) => {
+  if (!OPENAI_API_KEY) return null;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const r = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST", signal: ctrl.signal,
+      headers: { "Authorization": "Bearer " + OPENAI_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "gpt-5.1", input: query, tools: [{ type: "web_search" }] }),
+    });
+    if (!r.ok) return { error: "chatgpt " + r.status };
+    return await r.json();
+  } catch (e) { return { error: "chatgpt fetch failed" }; }
+  finally { clearTimeout(t); }
+};
+
+const extractChatGPTSources = (data) => {
+  const msg = (data?.output || []).find((o) => o?.type === "message") || {};
+  const content = Array.isArray(msg.content) ? msg.content : [];
+  const out = [];
+  for (const c of content) {
+    for (const a of (c?.annotations || [])) {
+      if (a?.type === "url_citation" && a.url) out.push({ url: a.url, title: a.title || "", kind: "citation" });
     }
   }
   return out;
@@ -1360,11 +1452,10 @@ const runCitationFinder = async (query, domain) => {
   const site = normalizeUrl(domain);
   const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
   const q = String(query).slice(0, 300);
-  // Perplexity first and usually alone: it returns the cited sources, which is all
-  // this function consumes. Claude with web_search costs several times more and was
-  // running on every single call for a second opinion we largely throw away.
+  // All four major answer engines, every run — this is the public-facing tool people
+  // compare against what we say elsewhere ("test it yourself on our site"), so it has
+  // to actually check the same four engines, not a cost-gated subset of them.
   let pplx = await callPerplexity(q);
-  let claude = null;
   // A 429 is "slow down", not "no". Waiting four seconds beats telling someone
   // their off-site score could not be measured.
   const rateLimited = (x) => x && x.error && /429/.test(String(x.error));
@@ -1373,21 +1464,29 @@ const runCitationFinder = async (query, domain) => {
     pplx = await callPerplexity(q);
     if (rateLimited(pplx)) { await new Promise(r => setTimeout(r, 8000)); pplx = await callPerplexity(q); }
   }
-  // Only pay for the expensive engine when the cheap one gave us nothing usable.
-  const thin = !pplx || pplx.error ||
-    (!Array.isArray(pplx.search_results) && !Array.isArray(pplx.citations)) ||
-    ((pplx.search_results || pplx.citations || []).length < 3);
-  if (thin && ANTHROPIC_API_KEY) claude = await callClaude(q);
-  if ((!pplx || pplx.error) && (!claude || claude.error)) return { error: pplx?.error || claude?.error || "AI query failed" };
+  const [claude, gemini, chatgpt] = await Promise.all([
+    ANTHROPIC_API_KEY ? callClaude(q) : Promise.resolve(null),
+    GEMINI_API_KEY ? callGemini(q) : Promise.resolve(null),
+    OPENAI_API_KEY ? callChatGPT(q) : Promise.resolve(null),
+  ]);
+  const allFailed = [pplx, claude, gemini, chatgpt].every((x) => !x || x.error);
+  if (allFailed) return { error: pplx?.error || claude?.error || gemini?.error || chatgpt?.error || "AI query failed" };
 
   const raw = [];
   if (pplx && !pplx.error) {
     let p = [];
     if (Array.isArray(pplx.search_results)) p = pplx.search_results.map((s) => ({ url: s.url, title: s.title || "" }));
     else if (Array.isArray(pplx.citations)) p = pplx.citations.map((u) => ({ url: u, title: "" }));
-    for (const c of p) raw.push({ url: c.url, title: c.title, engine: "Perplexity" });
+    // Perplexity's whole model is answer-grounded search: everything in search_results
+    // /citations is a source it actually drew the answer from, never a discarded lead.
+    // So every Perplexity source is citation-grade by construction.
+    for (const c of p) raw.push({ url: c.url, title: c.title, engine: "Perplexity", kind: "citation" });
   }
-  if (claude && !claude.error) for (const c of extractClaudeSources(claude)) raw.push({ url: c.url, title: c.title, engine: "Claude" });
+  if (claude && !claude.error) for (const c of extractClaudeSources(claude)) raw.push({ url: c.url, title: c.title, engine: "Claude", kind: c.kind });
+  // Gemini's cited "url" is a synthesized https://<domain> (see extractGeminiSources) —
+  // domain-level evidence, so treat it as citation-grade the same way Perplexity's is.
+  if (gemini && !gemini.error) for (const c of extractGeminiSources(gemini)) raw.push({ url: c.url, title: c.title, engine: "Gemini", kind: c.kind });
+  if (chatgpt && !chatgpt.error) for (const c of extractChatGPTSources(chatgpt)) raw.push({ url: c.url, title: c.title, engine: "ChatGPT", kind: c.kind });
 
   const byHost = new Map();
   for (const c of raw) {
@@ -1398,8 +1497,11 @@ const runCitationFinder = async (query, domain) => {
       const ex = byHost.get(host);
       if (!ex.engines.includes(c.engine)) ex.engines.push(c.engine);
       if (!ex.title && c.title) ex.title = c.title;
+      // A host earns "citation" the moment ANY engine actually cited it, even if
+      // another engine only retrieved it in passing. Citation is the stronger claim.
+      if (c.kind === "citation") ex.kind = "citation";
     } else if (byHost.size < 12) {
-      byHost.set(host, { url: c.url, host, title: c.title, type: classifySource(c.url), engines: [c.engine] });
+      byHost.set(host, { url: c.url, host, title: c.title, type: classifySource(c.url), engines: [c.engine], kind: c.kind });
     }
   }
   const sources = [...byHost.values()];
@@ -1420,12 +1522,36 @@ const runCitationFinder = async (query, domain) => {
   const enginesUsed = [];
   if (pplx && !pplx.error) enginesUsed.push("Perplexity");
   if (claude && !claude.error) enginesUsed.push("Claude");
+  if (gemini && !gemini.error) enginesUsed.push("Gemini");
+  if (chatgpt && !chatgpt.error) enginesUsed.push("ChatGPT");
   const answer = (pplx && !pplx.error && pplx.choices?.[0]?.message?.content) || "";
-  // The thing a buyer would actually notice: did the engine say your name?
-  // Checked against the full answer, before it is truncated for display.
-  const namedInAnswer = mentionsBrand(answer, variants);
+  // The thing a buyer would actually notice: did the engine say your name? Checked
+  // against every engine's full answer text, not just Perplexity's — a name that
+  // only Gemini or ChatGPT said out loud is still a real, checkable result.
+  const claudeText = claude && !claude.error
+    ? (claude.content || []).filter((b) => b?.type === "text").map((b) => b.text).join(" ") : "";
+  const geminiText = gemini && !gemini.error
+    ? (((gemini.candidates || [])[0]?.content?.parts) || []).filter((p) => p?.text).map((p) => p.text).join(" ") : "";
+  const chatgptText = chatgpt && !chatgpt.error
+    ? ((chatgpt.output || []).find((o) => o?.type === "message")?.content || []).filter((c) => c?.type === "output_text").map((c) => c.text).join(" ") : "";
+  const namedInAnswer = mentionsBrand([answer, claudeText, geminiText, chatgptText].join(" "), variants);
+
+  // ---- Cited vs mentioned ----
+  // This is the distinction that actually matters to a buyer: being described in an
+  // AI answer with nothing to click is not the same as being the linked source. A
+  // "mention" earns nothing measurable. A "citation" is a page someone can land on.
+  // youSource.kind is only "citation" grade when an engine actually cited that page
+  // in the text it wrote, not merely retrieved it while searching (see
+  // extractClaudeSources). Perplexity sources are always citation-grade by
+  // construction, so a Perplexity hit alone is enough to count as cited.
+  const youSource = sources.find(s => s.isYou);
+  const linkedCitation = !!youSource && youSource.kind === "citation";
+  const proseMention = namedInAnswer && !linkedCitation;
+  const status = linkedCitation ? "cited" : (proseMention ? "mentioned" : "absent");
+
   return { query: q, domain: bare, answer: answer.slice(0, 1200), total, inCount,
-    unknownCount, namedInAnswer, engines: enginesUsed, sources };
+    unknownCount, namedInAnswer, status, linkedCitation, proseMention,
+    engines: enginesUsed, sources };
 };
 
 // server identity (surfaced in the MCP handshake + directory listings)
@@ -1696,7 +1822,14 @@ app.post("/citation-finder", async (req, res) => {
     const r = await runCitationFinder(query, domain);
     if (r.error) return res.status(502).json({ error: r.error });
     if (email) logLeadToNotion({ email, domain: r.domain, query: r.query, inCount: r.inCount, total: r.total }); // fire-and-forget
-    res.json({ query: r.query, domain: r.domain, answer: r.answer, total: r.total, inCount: r.inCount, engines: r.engines, sources: r.sources });
+    // status/linkedCitation/proseMention are the whole point of this endpoint: whether
+    // the domain is a clickable source (cited), just named with no link (mentioned),
+    // or not in the answer at all (absent). Dropping them here is how a real
+    // cited/mentioned split silently turned back into a single yes/no on the frontend.
+    res.json({ query: r.query, domain: r.domain, answer: r.answer, total: r.total, inCount: r.inCount,
+      unknownCount: r.unknownCount, namedInAnswer: r.namedInAnswer, status: r.status,
+      linkedCitation: r.linkedCitation, proseMention: r.proseMention,
+      engines: r.engines, sources: r.sources });
   } catch (e) {
     res.status(500).json({ error: "internal error" });
   }
@@ -1765,12 +1898,22 @@ const citationDetail = (cite) => {
   const ranked = [...freq.entries()].sort((a, b) => b[1] - a[1])
     .map(([host, c]) => ({ host, cited_in: c, of_queries: runs.length,
       type: classifySource("https://" + host), joinable: isJoinable(host) }));
+  const linkedCount = runs.filter(r => r.linkedCitation).length;
+  const mentionedCount = runs.filter(r => r.proseMention).length;
   return {
     queries_tested: runs.length,
     queries_cited: runs.filter(r => r.named > 0 || r.answerNamed).length,
+    // The linked-vs-mentioned split, and the rate that turns it into one number a
+    // prospect can act on: what share of the times AI knew about them did it
+    // actually link them. See runCitationFinder's linkedCitation/proseMention.
+    queries_linked_citation: linkedCount,
+    queries_mentioned_only: mentionedCount,
+    citation_conversion_rate: (linkedCount + mentionedCount) > 0
+      ? Math.round((linkedCount / (linkedCount + mentionedCount)) * 100) : null,
     queries: runs.map(r => ({
       stage: r.stage, query: r.query,
       named_in_answer: !!r.answerNamed,
+      status: r.status || (r.linkedCitation ? "cited" : (r.proseMention ? "mentioned" : "absent")),
       sources_mentioning_you: r.named,
       cited_sources: (r.cited || []).map(x => x.host).slice(0, 8),
     })),
