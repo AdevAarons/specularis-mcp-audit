@@ -76,20 +76,21 @@
   var demo = P.get('demo')==='1' || (!q && !d);
   var statusEl = document.getElementById('status');
 
+  // Illustrative demo — de-identified on purpose (no real business or competitors named publicly).
   var DEMO = {
-    query:"best real estate agent in Tampa, FL", domain:"jenniferzales.com", inCount:2, total:12,
+    query:"best [your service] in [your city]", domain:"your website", inCount:2, total:12,
     sources:[
-      {name:"Tampa Magazine",appears:false},{name:"FastExpert",appears:false},
-      {name:"jenniferzales.com",appears:true},{name:"HomeLight",appears:false},
-      {name:"Yelp",appears:false},{name:"Smith & Associates",appears:false},
-      {name:"RatingsNearMe",appears:false},{name:"List With Clever",appears:false},
-      {name:"Reddit r/TampaBay",appears:false},{name:"The Lewkowicz Group",appears:false},
-      {name:"TabTab Labs",appears:false},{name:"2 College Brothers",appears:true}
+      {name:"Curated directory",appears:false},{name:"Review platform",appears:false},
+      {name:"Your website",appears:true},{name:"Niche directory",appears:false},
+      {name:"Review platform",appears:false},{name:"Local “best of” roundup",appears:false},
+      {name:"Rankings directory",appears:false},{name:"Comparison guide",appears:false},
+      {name:"Community thread",appears:false},{name:"Local blog listicle",appears:false},
+      {name:"Q&A platform",appears:false},{name:"Trade publication",appears:true}
     ]
   };
 
   function render(m){
-    document.getElementById('tag').textContent = demo ? 'Sample result' : 'Live result';
+    document.getElementById('tag').textContent = demo ? 'Illustrative' : 'Live result';
     document.getElementById('sub').textContent =
       'For "'+m.query+'," here are the '+m.total+' sources ChatGPT, Perplexity and Claude build their answer from — and where '+m.domain+' appears.';
     document.getElementById('big').textContent = m.inCount+'/'+m.total;
