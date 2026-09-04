@@ -30,6 +30,8 @@ let CITATION_FINDER_HTML = "";
 try { CITATION_FINDER_HTML = readFileSync(join(__dirname, "public", "citation-finder-demo.html"), "utf8"); } catch (e) {}
 let FINDER_HTML = "";
 try { FINDER_HTML = readFileSync(join(__dirname, "public", "finder.html"), "utf8"); } catch (e) {}
+let GAP_IMAGE_HTML = "";
+try { GAP_IMAGE_HTML = readFileSync(join(__dirname, "public", "gap-image.html"), "utf8"); } catch (e) {}
 let ADDONS_SWITCHER_HTML = "";
 try { ADDONS_SWITCHER_HTML = readFileSync(join(__dirname, "public", "addons-switcher.html"), "utf8"); } catch (e) {}
 let STATS_BAR_HTML = "";
@@ -1804,6 +1806,12 @@ app.get("/citation-finder-demo", (_req, res) => {
 app.get("/finder", (_req, res) => {
   if (!FINDER_HTML) return res.status(404).send("Not found");
   res.type("html").send(FINDER_HTML);
+});
+
+// Shareable "gap" chart image for a query+domain. ?q=&d= runs the finder live; ?demo=1 previews with sample data.
+app.get("/gap-image", (_req, res) => {
+  if (!GAP_IMAGE_HTML) return res.status(404).send("Not found");
+  res.type("html").send(GAP_IMAGE_HTML);
 });
 
 // AI Citation Source Finder — core endpoint. POST { query, domain } -> real cited sources + presence.

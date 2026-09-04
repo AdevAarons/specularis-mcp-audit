@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Citation Gap — shareable chart</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:#05070f; font-family:'Satoshi',system-ui,sans-serif; -webkit-font-smoothing:antialiased; display:flex; flex-direction:column; align-items:center; padding:24px 16px 60px; }
+  .bar{ width:1200px; max-width:100%; display:flex; gap:10px; justify-content:flex-end; margin-bottom:14px; }
+  .btn{ font-family:inherit; font-size:14px; font-weight:700; color:#fff; background:#2467E3; border:0; border-radius:40px; padding:11px 20px; cursor:pointer; }
+  .btn.ghost{ background:transparent; border:1px solid rgba(255,255,255,.2); }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .status{ color:#9aa3b4; font-size:13px; align-self:center; margin-right:auto; }
+
+  /* the capture target — fixed 1200x675 so the export is consistent */
+  #card{ width:1200px; height:675px; position:relative; overflow:hidden; background:linear-gradient(135deg,#101a30 0%,#0a0e18 55%); padding:50px 60px 42px; display:flex; flex-direction:column; flex:0 0 auto; }
+  .top{ display:flex; align-items:center; gap:12px; }
+  .eyebrow{ color:#4d8bff; font-weight:700; font-size:14px; letter-spacing:.2em; text-transform:uppercase; }
+  .tag{ font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#8fb4ff; border:1px solid rgba(77,139,255,.45); border-radius:20px; padding:3px 10px; }
+  h1{ color:#fff; font-weight:900; font-size:38px; line-height:1.06; letter-spacing:-.025em; margin:15px 0 8px; }
+  .sub{ color:#aab4c8; font-size:16px; font-weight:500; max-width:70ch; }
+
+  .row{ display:flex; gap:28px; margin-top:22px; flex:1; min-height:0; }
+  .big{ width:236px; flex-shrink:0; display:flex; flex-direction:column; justify-content:center; border-right:1px solid rgba(255,255,255,.1); padding-right:8px; }
+  .big .n{ font-weight:900; font-size:86px; line-height:.9; color:#4d8bff; letter-spacing:-.04em; }
+  .big .l{ color:#aab4c8; font-size:14.5px; font-weight:600; margin-top:14px; line-height:1.4; }
+  .big .reframe{ color:#fff; font-size:14.5px; font-weight:700; margin-top:20px; line-height:1.4; border-left:3px solid #2467E3; padding-left:12px; }
+
+  .grid{ flex:1; display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; align-content:center; }
+  .src{ display:flex; align-items:center; gap:11px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:11px; padding:10px 13px; }
+  .src.yes{ background:rgba(36,103,227,.12); border-color:rgba(77,139,255,.45); }
+  .src .ic{ width:22px; height:22px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:900; }
+  .src.no .ic{ background:rgba(255,255,255,.08); color:#7b8598; }
+  .src.yes .ic{ background:#2467E3; color:#fff; }
+  .src .nm{ color:#dfe5f0; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .src.no .nm{ color:#9aa3b4; }
+
+  .foot{ display:flex; align-items:center; justify-content:space-between; margin-top:16px; }
+  .note{ color:#6f7889; font-size:12px; }
+  .wm{ color:#fff; font-weight:900; font-size:18px; letter-spacing:.14em; }
+  #err{ color:#e0857c; font-size:14px; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <span class="status" id="status"></span>
+    <button class="btn ghost" id="again" style="display:none" onclick="location.reload()">Reload</button>
+    <button class="btn" id="dl" disabled onclick="downloadCard()">Download image</button>
+  </div>
+
+  <div id="card">
+    <div class="top"><span class="eyebrow">AI Citation Finder</span><span class="tag" id="tag">Sample result</span></div>
+    <h1 id="h1">You can rank on Google and still be invisible to AI</h1>
+    <div class="sub" id="sub"></div>
+    <div class="row">
+      <div class="big">
+        <div class="n" id="big">—</div>
+        <div class="l">sources AI cites for this query where the business appears</div>
+        <div class="reframe" id="reframe"></div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+    <div class="foot">
+      <div class="note">Live data from the AI Citation Finder · Perplexity + Claude · specularisinc.com/ai-citation-finder</div>
+      <div class="wm">SPECULARIS</div>
+    </div>
+  </div>
+
+<script>
+  var P = new URLSearchParams(location.search);
+  var q = (P.get('q')||'').trim(), d = (P.get('d')||'').trim();
+  var demo = P.get('demo')==='1' || (!q && !d);
+  var statusEl = document.getElementById('status');
+
+  var DEMO = {
+    query:"best real estate agent in Tampa, FL", domain:"jenniferzales.com", inCount:2, total:12,
+    sources:[
+      {name:"Tampa Magazine",appears:false},{name:"FastExpert",appears:false},
+      {name:"jenniferzales.com",appears:true},{name:"HomeLight",appears:false},
+      {name:"Yelp",appears:false},{name:"Smith & Associates",appears:false},
+      {name:"RatingsNearMe",appears:false},{name:"List With Clever",appears:false},
+      {name:"Reddit r/TampaBay",appears:false},{name:"The Lewkowicz Group",appears:false},
+      {name:"TabTab Labs",appears:false},{name:"2 College Brothers",appears:true}
+    ]
+  };
+
+  function render(m){
+    document.getElementById('tag').textContent = demo ? 'Sample result' : 'Live result';
+    document.getElementById('sub').textContent =
+      'For "'+m.query+'," here are the '+m.total+' sources ChatGPT, Perplexity and Claude build their answer from — and where '+m.domain+' appears.';
+    document.getElementById('big').textContent = m.inCount+'/'+m.total;
+    var miss = m.total - m.inCount;
+    document.getElementById('reframe').textContent =
+      m.inCount===0 ? 'None of the '+m.total+' pages that decide the AI answer mention them.'
+                    : miss+' of the '+m.total+' pages that decide the AI answer never mention them.';
+    var grid = document.getElementById('grid'); grid.innerHTML='';
+    m.sources.slice(0,12).forEach(function(s){
+      var div=document.createElement('div'); div.className='src '+(s.appears?'yes':'no');
+      div.innerHTML='<span class="ic">'+(s.appears?'✓':'×')+'</span><span class="nm">'+s.name+'</span>';
+      grid.appendChild(div);
+    });
+    document.getElementById('dl').disabled=false;
+    statusEl.textContent='';
+  }
+
+  function downloadCard(){
+    var card=document.getElementById('card'), btn=document.getElementById('dl');
+    btn.disabled=true; statusEl.textContent='Rendering…';
+    html2canvas(card,{scale:2, backgroundColor:'#0a0e18', logging:false}).then(function(canvas){
+      canvas.toBlob(function(blob){
+        var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+        a.download='ai-citation-gap.png'; document.body.appendChild(a); a.click(); a.remove();
+        statusEl.textContent='Downloaded.'; btn.disabled=false;
+      },'image/png');
+    }).catch(function(){ statusEl.textContent='Could not render — try screenshotting the card.'; btn.disabled=false; });
+  }
+
+  if(demo){ render(DEMO); }
+  else {
+    statusEl.textContent='Asking AI and checking sources…';
+    fetch('/citation-finder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,domain:d})})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+      .then(function(res){
+        if(!res.ok || res.j.error){ statusEl.textContent = res.j.error || 'Something went wrong.'; document.getElementById('again').style.display=''; return; }
+        var j=res.j;
+        render({ query:j.query, domain:j.domain, inCount:j.inCount, total:j.total,
+          sources:(j.sources||[]).map(function(s){ return {name:s.title||s.host, appears:!!s.appearsYou}; }) });
+      })
+      .catch(function(){ statusEl.textContent='Network error.'; document.getElementById('again').style.display=''; });
+  }
+</script>
+</body>
+</html>
