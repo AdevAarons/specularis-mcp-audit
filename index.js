@@ -58,6 +58,8 @@ let PAVILION_HTML = "";
 try { PAVILION_HTML = readFileSync(join(__dirname, "public", "pavilion-construction.html"), "utf8"); } catch (e) {}
 let CATMAN_HTML = "";
 try { CATMAN_HTML = readFileSync(join(__dirname, "public", "catman.html"), "utf8"); } catch (e) {}
+let DOCURIOUS_HTML = "";
+try { DOCURIOUS_HTML = readFileSync(join(__dirname, "public", "docurious.html"), "utf8"); } catch (e) {}
 // Brand assets (served for schema logo/image + og); binary buffers loaded once
 let LOGO_PNG = null, HEADSHOT_PNG = null;
 try { LOGO_PNG = readFileSync(join(__dirname, "public", "assets", "specularis-logo.png")); } catch (e) {}
@@ -1782,6 +1784,12 @@ app.get("/pavilion-construction", (_req, res) => {
 app.get("/catman", (_req, res) => {
   if (!CATMAN_HTML) return res.status(404).send("Not found");
   res.type("html").send(CATMAN_HTML);
+});
+
+// Client scoreboard — DoCurious
+app.get("/docurious", (_req, res) => {
+  if (!DOCURIOUS_HTML) return res.status(404).send("Not found");
+  res.type("html").send(DOCURIOUS_HTML);
 });
 
 // Copy-source for restoring the Tampa study article body into the Framer CMS
