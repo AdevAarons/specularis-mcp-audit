@@ -32,6 +32,8 @@ let FINDER_HTML = "";
 try { FINDER_HTML = readFileSync(join(__dirname, "public", "finder.html"), "utf8"); } catch (e) {}
 let GAP_IMAGE_HTML = "";
 try { GAP_IMAGE_HTML = readFileSync(join(__dirname, "public", "gap-image.html"), "utf8"); } catch (e) {}
+let PRESS_HTML = "";
+try { PRESS_HTML = readFileSync(join(__dirname, "public", "press.html"), "utf8"); } catch (e) {}
 let ADDONS_SWITCHER_HTML = "";
 try { ADDONS_SWITCHER_HTML = readFileSync(join(__dirname, "public", "addons-switcher.html"), "utf8"); } catch (e) {}
 let STATS_BAR_HTML = "";
@@ -1739,6 +1741,8 @@ function buildServer() {
 const app = express();
 app.set("trust proxy", true); // Railway sits behind a proxy — trust X-Forwarded-For for real client IPs
 app.use(express.json());
+// Serve everything in public/assets (press creatives, logo, etc.) with light caching
+app.use("/assets", express.static(join(__dirname, "public", "assets"), { maxAge: "1d" }));
 
 app.get("/", (_req, res) => res.json({
   name: "specularis-ai-visibility-audit",
@@ -1820,6 +1824,12 @@ app.get("/finder", (_req, res) => {
 app.get("/gap-image", (_req, res) => {
   if (!GAP_IMAGE_HTML) return res.status(404).send("Not found");
   res.type("html").send(GAP_IMAGE_HTML);
+});
+
+// Press & media kit (boilerplate, facts, story angles, proof, downloadable creatives)
+app.get(["/press", "/media-kit"], (_req, res) => {
+  if (!PRESS_HTML) return res.status(404).send("Not found");
+  res.type("html").send(PRESS_HTML);
 });
 
 // AI Citation Source Finder — core endpoint. POST { query, domain } -> real cited sources + presence.
