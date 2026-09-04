@@ -95,6 +95,15 @@ h2{ font-weight:900; font-size:clamp(21px,3.2vw,27px); letter-spacing:-.015em; m
 .fc s{ color:var(--dim); font-weight:600; font-size:10px; text-decoration:none; margin-top:2px; }
 @media(max-width:680px){ .funnel{ flex-direction:column; } }
 
+/* pillar score breakdown */
+.pillars{ display:flex; flex-direction:column; gap:16px; }
+.pbar-top{ display:flex; justify-content:space-between; align-items:baseline; font-size:13.5px; gap:10px; }
+.pbar-l{ color:#dfe4ee; font-weight:700; }
+.pbar-v{ color:var(--accent-lt); font-weight:900; }
+.pbar-track{ height:8px; background:var(--panel2); border:1px solid var(--line); border-radius:5px; margin-top:7px; overflow:hidden; }
+.pbar-fill{ height:100%; background:linear-gradient(90deg,var(--accent),var(--accent-lt)); border-radius:5px; }
+.pbar-note{ color:var(--muted); font-size:12.5px; margin-top:6px; }
+
 /* invest + roi */
 .invest{ display:flex; gap:28px; flex-wrap:wrap; align-items:baseline; background:var(--panel2); border:1px solid var(--line); border-radius:13px; padding:18px 22px; margin-top:18px; }
 .invest .a{ font-weight:900; font-size:25px; color:#fff; }
@@ -140,10 +149,27 @@ a{ color:var(--accent-lt); }
 
   <div class="kpis num">
     <div class="kpi"><div class="l">AI Visibility Score</div><div class="v"><span class="now">56</span><span class="to">→</span><span class="goal">84</span></div><div class="c">Grade C today · 90-day goal</div></div>
-    <div class="kpi"><div class="l">AI Answer Share</div><div class="v"><span class="now">0<span style="font-size:15px;color:var(--dim)">/40</span></span><span class="to">→</span><span class="goal">20/40</span></div><div class="c">times AI names you</div></div>
+    <div class="kpi"><div class="l">AI Answer Share</div><div class="v"><span class="now">7<span style="font-size:15px;color:var(--dim)">/40</span></span><span class="to">→</span><span class="goal">20/40</span></div><div class="c">times AI names you</div></div>
     <div class="kpi"><div class="l">Search + AI traffic</div><div class="v"><span class="now sm">Baseline</span><span class="to">→</span><span class="goal">+40–60%</span></div><div class="c">from Google Analytics</div></div>
     <div class="kpi"><div class="l">New bid invites / yr</div><div class="v"><span class="now sm">Baseline</span><span class="to">→</span><span class="goal">+50%</span></div><div class="c">qualified bid invitations</div></div>
   </div>
+
+  <!-- SCORE BREAKDOWN -->
+  <div class="section">
+    <div class="eyebrow">Where the 56 comes from</div>
+    <h2>Pavilion's foundation is real &mdash; crawler access and off-site presence are already solid.</h2>
+    <p class="deck">Two of five pillars are genuinely strong: Pavilion is fully open to AI crawlers, and a real 19-year track record already shows up across LinkedIn, industry directories, and public records. The other three pillars &mdash; entity, content, and technical &mdash; are where the real, closable gaps sit.</p>
+    <div class="outcome" style="margin-top:16px"><b>What's already working:</b> Pavilion is fully crawlable by every major AI engine, and its off-site presence &mdash; LinkedIn, D&amp;B, BBB, BuildZoom, a 12-state track record &mdash; is already well-established. That's the foundation the rest of this plan builds on.</div>
+    <div class="pillars num" style="margin-top:22px">
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Crawler access</span><span class="pbar-v">20/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:100%"></div></div><p class="pbar-note">All major AI engines can already read pavilionconstruction.com in full.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Entity &amp; schema</span><span class="pbar-v">6/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:30%"></div></div><p class="pbar-note">No structured Person or Organization data anywhere on the site &mdash; zero JSON-LD.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Content citability</span><span class="pbar-v">7/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:35%"></div></div><p class="pbar-note">Portfolio and service pages exist, but nothing is written answer-first, and there's no FAQ schema.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Off-site corroboration</span><span class="pbar-v">15/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:75%"></div></div><p class="pbar-note">Real, established presence: LinkedIn, D&amp;B, BBB, BuildZoom, and Houzz all corroborate a genuine 19-year track record.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Technical foundation</span><span class="pbar-v">8/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:40%"></div></div><p class="pbar-note">No working sitemap (404 on every variant tried), and no homepage meta description.</p></div>
+    </div>
+  </div>
+
+  <div class="rule"></div>
 
   <!-- TODAY -->
   <div class="section">
@@ -156,19 +182,19 @@ a{ color:var(--accent-lt); }
           <tr><td class="q">"Best multi-family construction company in the Pacific Northwest"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
           <tr><td class="q">"General contractor for affordable &amp; senior housing"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
           <tr><td class="q">"Best general contractor in Portland, Oregon for commercial construction"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Who is Brian Gerritz, Pavilion Construction?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
+          <tr><td class="q">"Who is Brian Gerritz, Pavilion Construction?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
           <tr><td class="q">"Reliable GC for a multi-family development in Oregon or Arizona"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
           <tr><td class="q">"Who builds large apartment &amp; mixed-use communities in the western U.S.?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
           <tr><td class="q">"Experienced student-housing construction contractor"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Pavilion Construction vs Andersen Construction"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
+          <tr><td class="q">"Pavilion Construction vs Andersen Construction"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
           <tr><td class="q">"Top general contractors for senior housing developers in the western US"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
           <tr><td class="q">"How do I choose a general contractor for a multi-family development?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
         </tbody>
       </table>
     </div>
-    <div class="tally"><span class="big r num">0 of 40</span><span class="tx">Across 10 buyer questions × 4 AI engines, Pavilion Construction is named <b style="color:#ffa8a5">zero</b> times.</span></div>
+    <div class="tally"><span class="big r num">7 of 40</span><span class="tx">Across 10 buyer questions × 4 AI engines, Pavilion Construction is named <b style="color:#ffa8a5">only 7</b> times &mdash; both times only when the question already includes the name "Brian Gerritz" or "Pavilion Construction." On every generic category question, it's zero.</span></div>
     <div style="color:var(--muted);font-size:13.5px;margin-top:15px">Instead, AI hands the answer to:</div>
-    <div class="pills"><span class="pill">Andersen Construction</span><span class="pill">Bremik Construction</span><span class="pill">Beaudin Construction</span></div>
+    <div class="pills"><span class="pill">W.G. Clark Construction</span><span class="pill">Walsh Construction</span><span class="pill">Wilson Company</span></div>
   </div>
 
   <!-- 90 DAY -->
@@ -244,7 +270,7 @@ a{ color:var(--accent-lt); }
             <li><b>Industry &amp; community proof</b> — project references, developer testimonials, and answers in the trade communities and Q&amp;A where owners and developers research general contractors. These are the sources AI leans on for B2B recommendations.</li>
           </ul></div>
         </div>
-        <div class="outcome"><b>By ~90 days:</b> AI Answer Share 0/40 → 14–20/40 · new reviews &amp; references · 2–4 press or award placements live · you appear in "best GC / top contractor" roundups.</div>
+        <div class="outcome"><b>By ~90 days:</b> AI Answer Share 7/40 → 14–20/40 · new reviews &amp; references · 2–4 press or award placements live · you appear in "best GC / top contractor" roundups.</div>
       </div>
     </div>
 
@@ -290,7 +316,7 @@ a{ color:var(--accent-lt); }
   <div class="section" style="margin-top:36px">
     <div class="eyebrow">Our recommendation</div>
     <h2>Run Foundation and Authority &amp; Proof together, not sequentially.</h2>
-    <p class="deck" style="margin-bottom:22px">Pavilion is fully crawlable and a real, established 12-state firm — the gap is entirely on the entity and authority side, not access. We recommend starting Foundation and Authority &amp; Proof in parallel so Brian and the firm read as a structured, citable entity within 90 days, instead of a slow phase-by-phase ramp. That's the fastest realistic path from a 56/C to the answers where Andersen and Bremik get named today.</p>
+    <p class="deck" style="margin-bottom:22px">Our live citation test found something precise: Pavilion already gets cited &mdash; but only on the 2 of 10 questions that already include the name "Brian Gerritz" or "Pavilion Construction." On every generic category question ("best multi-family GC in the Pacific Northwest"), it's a clean zero, and W.G. Clark, Walsh, and Wilson get named instead. That's not a visibility problem, it's an entity problem: nothing tells AI that Pavilion belongs in that category conversation at all. We recommend starting Foundation and Authority &amp; Proof in parallel so Brian and the firm read as a structured, citable entity within 90 days, instead of a slow phase-by-phase ramp.</p>
     <div class="grid2">
       <div class="grp"><div class="gh">What we'd run</div><ul>
         <li>Foundation: Person + Organization schema for Brian and Pavilion, GBPs for all three offices, sitemap fixed, project pages rebuilt answer-first.</li>
@@ -299,7 +325,7 @@ a{ color:var(--accent-lt); }
       </ul></div>
       <div class="grp"><div class="gh">What it gets you</div><ul>
         <li>AI Visibility Score climbs from 56 to the mid-80s within 90 days.</li>
-        <li>Pavilion named alongside Andersen and Bremik on the questions that actually bring bid invitations.</li>
+        <li>Pavilion named on the category questions, not just the branded ones &mdash; the exact gap our live test found.</li>
         <li>A live scoreboard Brian can check anytime — not a one-time report that goes stale.</li>
       </ul></div>
     </div>
@@ -319,7 +345,7 @@ a{ color:var(--accent-lt); }
     <div style="margin-top:13px;color:var(--muted);font-size:13px"><b style="color:var(--accent-lt)">We price to the scope we agree on, not a fixed package.</b> Most engagements run in phases like the ones above; we'll right-size it to Pavilion's goals and pipeline on this call. You get the full blueprint either way.</div>
     <div class="roi num">
       <div class="rc"><div class="s">Conservative</div><div class="m">Found</div><div class="r">in the bids you miss today</div><p>Just being named when owners and developers ask AI for a GC puts you in rooms you're invisible to now.</p></div>
-      <div class="rc mid"><div class="s">Expected</div><div class="m">Shortlisted</div><div class="r">more often</div><p>AI names Pavilion alongside Andersen and Bremik — onto more shortlists, into more bid invitations.</p></div>
+      <div class="rc mid"><div class="s">Expected</div><div class="m">Shortlisted</div><div class="r">more often</div><p>AI names Pavilion alongside W.G. Clark and Walsh — onto more shortlists, into more bid invitations.</p></div>
       <div class="rc"><div class="s">Strong</div><div class="m">Default</div><div class="r">GC in the West</div><p>Citations and project references compound until AI names Pavilion first for multi-family in your region.</p></div>
     </div>
     <div class="note">Projections, not guarantees — the actual return depends on your close rate and client value, which we track together right here. Even the conservative case is built to pay for itself.</div>
@@ -327,7 +353,7 @@ a{ color:var(--accent-lt); }
 
   <div class="foot">
     <b>How this works:</b> we refresh this scoreboard every two weeks and walk you through it. Traffic and lead numbers pull from your <b>Google Analytics</b>; keyword and competitor data from our <b>SEMrush</b>; AI answer checks are run by hand against each engine.<br>
-    Baseline captured this week from a live Specularis AI-visibility audit of pavilionconstruction.com. Today's competitor names are the results web search + AI returned for these queries at time of scan; we re-run all 40 by hand against each engine in week one. Reference stat: in our 14-site study, businesses AI recommends scored ~20 points higher than the ones it ignores (64.5 vs 44.7) — the exact gap this plan closes.
+    Baseline captured this week from a live Specularis AI-visibility audit of pavilionconstruction.com. Every result above is from a live run of the citation-finder tool against ChatGPT, Claude, Gemini, and Perplexity on 2026-09-04 — real API calls, not an approximation. We re-run all 40 by hand against each engine every two weeks. Reference stat: in our 14-site study, businesses AI recommends scored ~20 points higher than the ones it ignores (64.5 vs 44.7) — the exact gap this plan closes.
   </div>
 
 </div>
