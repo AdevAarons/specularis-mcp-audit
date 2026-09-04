@@ -95,6 +95,15 @@ h2{ font-weight:900; font-size:clamp(21px,3.2vw,27px); letter-spacing:-.015em; m
 .fc s{ color:var(--dim); font-weight:600; font-size:10px; text-decoration:none; margin-top:2px; }
 @media(max-width:680px){ .funnel{ flex-direction:column; } }
 
+/* pillar score breakdown */
+.pillars{ display:flex; flex-direction:column; gap:16px; }
+.pbar-top{ display:flex; justify-content:space-between; align-items:baseline; font-size:13.5px; gap:10px; }
+.pbar-l{ color:#dfe4ee; font-weight:700; }
+.pbar-v{ color:var(--accent-lt); font-weight:900; }
+.pbar-track{ height:8px; background:var(--panel2); border:1px solid var(--line); border-radius:5px; margin-top:7px; overflow:hidden; }
+.pbar-fill{ height:100%; background:linear-gradient(90deg,var(--accent),var(--accent-lt)); border-radius:5px; }
+.pbar-note{ color:var(--muted); font-size:12.5px; margin-top:6px; }
+
 /* invest + roi */
 .invest{ display:flex; gap:28px; flex-wrap:wrap; align-items:baseline; background:var(--panel2); border:1px solid var(--line); border-radius:13px; padding:18px 22px; margin-top:18px; }
 .invest .a{ font-weight:900; font-size:25px; color:#fff; }
@@ -136,14 +145,31 @@ a{ color:var(--accent-lt); }
   </div>
 
   <h1>Where AI puts you today, and where we'll have you in <em>90 days.</em></h1>
-  <p class="deck">We ask ChatGPT, Claude, Perplexity, and Google the questions your future clients ask — and track exactly when AI starts naming Category Management Association instead of the training vendors it names today. This is your live scoreboard.</p>
+  <p class="deck">We ask ChatGPT, Claude, Perplexity, and Google the questions your future clients ask &mdash; and track exactly which engine still doesn't name Category Management Association. This is your live scoreboard.</p>
 
   <div class="kpis num">
     <div class="kpi"><div class="l">AI Visibility Score</div><div class="v"><span class="now">52</span><span class="to">→</span><span class="goal">80</span></div><div class="c">Grade D today · 90-day goal</div></div>
-    <div class="kpi"><div class="l">AI Answer Share</div><div class="v"><span class="now">0<span style="font-size:15px;color:var(--dim)">/40</span></span><span class="to">→</span><span class="goal">20/40</span></div><div class="c">times AI names you</div></div>
+    <div class="kpi"><div class="l">AI Answer Share</div><div class="v"><span class="now">27<span style="font-size:15px;color:var(--dim)">/40</span></span><span class="to">→</span><span class="goal">37/40</span></div><div class="c">times AI names you</div></div>
     <div class="kpi"><div class="l">Search + AI traffic</div><div class="v"><span class="now sm">Baseline</span><span class="to">→</span><span class="goal">+40–60%</span></div><div class="c">from Google Analytics</div></div>
     <div class="kpi"><div class="l">New members / certs</div><div class="v"><span class="now sm">Baseline</span><span class="to">→</span><span class="goal">+50%</span></div><div class="c">members &amp; certifications</div></div>
   </div>
+
+  <!-- SCORE BREAKDOWN -->
+  <div class="section">
+    <div class="eyebrow">Where the 52 comes from</div>
+    <h2>The CMA's off-site presence is genuinely strong &mdash; crawler access is the one real drag.</h2>
+    <p class="deck">Off-site corroboration, technical foundation, and content are all in reasonable shape &mdash; this isn't a from-scratch build. The crawler pillar is capped low because of a real, confirmed block, and it's the fastest, cheapest fix in this entire plan.</p>
+    <div class="outcome" style="margin-top:16px"><b>What's already working:</b> The CMA's off-site presence &mdash; 20+ years in the industry, real press, a consistent LinkedIn &mdash; is already the strongest pillar of the five. Crawler access is the one pillar dragging the score down, and it's a config toggle, not a rebuild.</div>
+    <div class="pillars num" style="margin-top:22px">
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Crawler access</span><span class="pbar-v">5/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:25%"></div></div><p class="pbar-note">GPTBot and ClaudeBot are both blocked at the Cloudflare edge &mdash; confirmed via direct testing.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Entity &amp; schema</span><span class="pbar-v">8/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:40%"></div></div><p class="pbar-note">One generic JSON-LD block exists, but no linked Person/Organization graph.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Content citability</span><span class="pbar-v">11/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:55%"></div></div><p class="pbar-note">Real certification overview and editorial content exist &mdash; just not structured as answer-first Q&amp;A.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Off-site corroboration</span><span class="pbar-v">16/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:80%"></div></div><p class="pbar-note">20+ years in the industry, real press, and a consistent LinkedIn &mdash; the strongest of the five pillars.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Technical foundation</span><span class="pbar-v">12/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:60%"></div></div><p class="pbar-note">WordPress + Yoast, sitemap present, indexed &mdash; healthy apart from the crawler block.</p></div>
+    </div>
+  </div>
+
+  <div class="rule"></div>
 
   <!-- TODAY -->
   <div class="section">
@@ -153,21 +179,21 @@ a{ color:var(--accent-lt); }
       <table>
         <thead><tr><th class="q">The question your future client asks AI</th><th>ChatGPT</th><th>Claude</th><th>Perplexity</th><th>Google&nbsp;AI</th></tr></thead>
         <tbody>
-          <tr><td class="q">"Best category management certification for CPG &amp; retail teams"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Where do I get category management training and credentials?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"What's the leading professional association for category management?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"What is CPCA, CPCM, and CPSA certification, and who administers them?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
+          <tr><td class="q">"Best category management certification for CPG &amp; retail teams"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"Where do I get category management training and credentials?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"What's the leading professional association for category management?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"What is CPCA, CPCM, and CPSA certification, and who administers them?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
           <tr><td class="q">"How do I become a certified category manager (CPCM)?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Who sets the standard curriculum for category management certification?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Category management standards, community, and events"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"CMKG vs Category Management Association — which certification is better?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Top organizations for category management professional development"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Best category management training for a new analyst in retail or CPG"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
+          <tr><td class="q">"Who sets the standard curriculum for category management certification?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"Category management standards, community, and events"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"CMKG vs Category Management Association — which certification is better?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"Top organizations for category management professional development"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"Best category management training for a new analyst in retail or CPG"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
         </tbody>
       </table>
     </div>
-    <div class="tally"><span class="big r num">0 of 40</span><span class="tx">Across 10 buyer questions × 4 AI engines, Category Management Association is named <b style="color:#ffa8a5">zero</b> times.</span></div>
-    <div style="color:var(--muted);font-size:13.5px;margin-top:15px">Instead, AI hands the answer to:</div>
+    <div class="tally"><span class="big g num">27 of 40</span><span class="tx">Across 10 buyer questions × 4 AI engines, Category Management Association is already named <b style="color:#43c06d">27</b> times &mdash; strong on Perplexity (9/10) and Gemini (9/10), moderate on ChatGPT (6/10), and weak on Claude (3/10), the one engine confirmed blocked at the Cloudflare layer.</span></div>
+    <div style="color:var(--muted);font-size:13.5px;margin-top:15px">The CMA is already cited alongside these training vendors on most engines:</div>
     <div class="pills"><span class="pill">CMKG</span><span class="pill">Learning Evolution</span><span class="pill">NielsenIQ</span></div>
   </div>
 
@@ -181,18 +207,18 @@ a{ color:var(--accent-lt); }
         <tbody>
           <tr><td class="q">"Best category management certification for CPG &amp; retail teams"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
           <tr><td class="q">"Where do I get category management training and credentials?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
-          <tr><td class="q">"What's the leading professional association for category management?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-emg">~</span></td></tr>
-          <tr><td class="q">"What is CPCA, CPCM, and CPSA certification, and who administers them?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"How do I become a certified category manager (CPCM)?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-emg">~</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Who sets the standard curriculum for category management certification?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Category management standards, community, and events"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-emg">~</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"CMKG vs Category Management Association — which certification is better?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Top organizations for category management professional development"</td><td><span class="chip c-emg">~</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
-          <tr><td class="q">"Best category management training for a new analyst in retail or CPG"</td><td><span class="chip c-emg">~</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td></tr>
+          <tr><td class="q">"What's the leading professional association for category management?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"What is CPCA, CPCM, and CPSA certification, and who administers them?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"How do I become a certified category manager (CPCM)?"</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-emg">~</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"Who sets the standard curriculum for category management certification?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"Category management standards, community, and events"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"CMKG vs Category Management Association — which certification is better?"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"Top organizations for category management professional development"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
+          <tr><td class="q">"Best category management training for a new analyst in retail or CPG"</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td></tr>
         </tbody>
       </table>
     </div>
-    <div class="tally"><span class="big g num">20 of 40</span><span class="tx">Goal: AI names Category Management Association for the questions that actually bring you clients.</span></div>
+    <div class="tally"><span class="big g num">37 of 40</span><span class="tx">Goal: AI names Category Management Association for the questions that actually bring you clients.</span></div>
     <div class="legend"><span><span class="chip c-yes" style="width:17px;height:17px;font-size:10px">✓</span> Named</span><span><span class="chip c-emg" style="width:17px;height:17px;font-size:10px">~</span> Emerging</span><span><span class="chip c-no" style="width:17px;height:17px;font-size:10px">✕</span> Not yet</span></div>
   </div>
 
@@ -244,7 +270,7 @@ a{ color:var(--accent-lt); }
             <li><b>Community &amp; Q&amp;A</b> — the CMA and its experts answering where practitioners ask: LinkedIn, r/CPG, r/retail, and industry forums. These are sources AI cites.</li>
           </ul></div>
         </div>
-        <div class="outcome"><b>By ~90 days:</b> AI Answer Share 0/40 → 14–20/40 · member &amp; partner references · 2–4 trade-press placements live · the CMA appears in "best category management certification" roundups.</div>
+        <div class="outcome"><b>By ~90 days:</b> AI Answer Share 27/40 → 30–37/40 · member &amp; partner references · 2–4 trade-press placements live · the CMA appears in "best category management certification" roundups.</div>
       </div>
     </div>
 
@@ -289,8 +315,8 @@ a{ color:var(--accent-lt); }
   <!-- RECOMMENDATION -->
   <div class="section" style="margin-top:36px">
     <div class="eyebrow">Our recommendation</div>
-    <h2>Fix the crawler block first, alone, before anything else.</h2>
-    <p class="deck" style="margin-bottom:22px">The CMA's biggest problem isn't content or authority — it's that ChatGPT and Claude are blocked from reading the site today, at the Cloudflare edge. We recommend Phase 1 lead with that single fix, paired with the entity work, so both engines can crawl the CMA immediately. Phase 2 then earns the citations that get the CMA named over CMKG and NielsenIQ for the credential it actually owns.</p>
+    <h2>You're already winning on 3 of 4 engines. Close the Claude gap.</h2>
+    <p class="deck" style="margin-bottom:22px">Our live citation test found something better than the crawler audit alone suggested: the CMA is already cited on 9 of 10 category questions by Perplexity, 9 of 10 by Gemini, and 6 of 10 by ChatGPT. Claude is the clear outlier at just 3 of 10 &mdash; consistent with the confirmed Cloudflare block on ClaudeBot, though notably the block doesn't fully explain ChatGPT's gap either, since GPTBot is blocked too but ChatGPT still cites you more than half the time. We recommend Phase 1 lead with the Cloudflare fix specifically to close Claude's gap, paired with entity work to help ChatGPT catch up to Perplexity and Gemini's level.</p>
     <div class="grid2">
       <div class="grp"><div class="gh">What we'd run</div><ul>
         <li>Foundation: unblock GPTBot &amp; ClaudeBot in Cloudflare, add Organization + certification schema, fix the sitemap.</li>
@@ -299,7 +325,7 @@ a{ color:var(--accent-lt); }
       </ul></div>
       <div class="grp"><div class="gh">What it gets you</div><ul>
         <li>AI Visibility Score climbs from 52 to the low-80s within 90 days.</li>
-        <li>ChatGPT and Claude can finally read and cite the CMA, instead of defaulting to CMKG and NielsenIQ.</li>
+        <li>Claude closes most of the gap to Perplexity and Gemini's already-strong citation rate; ChatGPT catches up too.</li>
         <li>The CMA positioned as the authority AI cites for CPCA/CPCM/CPSA, not one training vendor among many.</li>
       </ul></div>
     </div>
@@ -318,16 +344,16 @@ a{ color:var(--accent-lt); }
     </div>
     <div style="margin-top:13px;color:var(--muted);font-size:13px"><b style="color:var(--accent-lt)">We price to the scope we agree on, not a fixed package.</b> Most engagements run in phases like the ones above; we'll right-size it to the CMA's goals on this call. Phase 1 starts with the one Cloudflare fix that reopens ChatGPT and Claude.</div>
     <div class="roi num">
-      <div class="rc"><div class="s">Conservative</div><div class="m">Read</div><div class="r">by ChatGPT &amp; Claude again</div><p>Flip one Cloudflare switch and the two biggest AI engines can finally see the CMA — the cheapest fix with the biggest reach.</p></div>
-      <div class="rc mid"><div class="s">Expected</div><div class="m">Named</div><div class="r">for the credential</div><p>AI names the CMA next to CMKG and NielsenIQ when practitioners ask where to get certified.</p></div>
-      <div class="rc"><div class="s">Strong</div><div class="m">The authority</div><div class="r">AI cites first</div><p>The CMA becomes the source AI cites for the category-management credential it actually owns.</p></div>
+      <div class="rc"><div class="s">Conservative</div><div class="m">Read</div><div class="r">by Claude, at last</div><p>Flip one Cloudflare switch and the one engine still mostly blind to the CMA can finally catch up — the cheapest fix with the clearest target.</p></div>
+      <div class="rc mid"><div class="s">Expected</div><div class="m">Named</div><div class="r">for the credential</div><p>ChatGPT closes the gap to Perplexity and Gemini's already-strong citation rate, not just Claude.</p></div>
+      <div class="rc"><div class="s">Strong</div><div class="m">The authority</div><div class="r">AI cites first</div><p>All four engines cite the CMA at the rate Perplexity and Gemini already do today.</p></div>
     </div>
     <div class="note">Projections, not guarantees — the actual return depends on your close rate and client value, which we track together right here. Even the conservative case is built to pay for itself.</div>
   </div>
 
   <div class="foot">
     <b>How this works:</b> we refresh this scoreboard every two weeks and walk you through it. Traffic and lead numbers pull from your <b>Google Analytics</b>; keyword and competitor data from our <b>SEMrush</b>; AI answer checks are run by hand against each engine.<br>
-    Baseline captured this week from a live Specularis AI-visibility audit of catman.global. Today's competitor names are the results web search + AI returned for these queries at time of scan; we re-run all 40 by hand against each engine in week one. Reference stat: in our 14-site study, businesses AI recommends scored ~20 points higher than the ones it ignores (64.5 vs 44.7) — the exact gap this plan closes.
+    Baseline captured this week from a live Specularis AI-visibility audit of catman.global. Every result above is from a live run of the citation-finder tool against ChatGPT, Claude, Gemini, and Perplexity on 2026-09-04 — real API calls, not an approximation. We re-run all 40 by hand against each engine every two weeks. Reference stat: in our 14-site study, businesses AI recommends scored ~20 points higher than the ones it ignores (64.5 vs 44.7) — the exact gap this plan closes.
   </div>
 
 </div>
