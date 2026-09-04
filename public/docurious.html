@@ -95,6 +95,15 @@ h2{ font-weight:900; font-size:clamp(21px,3.2vw,27px); letter-spacing:-.015em; m
 .fc s{ color:var(--dim); font-weight:600; font-size:10px; text-decoration:none; margin-top:2px; }
 @media(max-width:680px){ .funnel{ flex-direction:column; } }
 
+/* pillar score breakdown */
+.pillars{ display:flex; flex-direction:column; gap:16px; }
+.pbar-top{ display:flex; justify-content:space-between; align-items:baseline; font-size:13.5px; gap:10px; }
+.pbar-l{ color:#dfe4ee; font-weight:700; }
+.pbar-v{ color:var(--accent-lt); font-weight:900; }
+.pbar-track{ height:8px; background:var(--panel2); border:1px solid var(--line); border-radius:5px; margin-top:7px; overflow:hidden; }
+.pbar-fill{ height:100%; background:linear-gradient(90deg,var(--accent),var(--accent-lt)); border-radius:5px; }
+.pbar-note{ color:var(--muted); font-size:12.5px; margin-top:6px; }
+
 /* invest + roi */
 .invest{ display:flex; gap:28px; flex-wrap:wrap; align-items:baseline; background:var(--panel2); border:1px solid var(--line); border-radius:13px; padding:18px 22px; margin-top:18px; }
 .invest .a{ font-weight:900; font-size:25px; color:#fff; }
@@ -144,6 +153,23 @@ a{ color:var(--accent-lt); }
     <div class="kpi"><div class="l">Search + AI traffic</div><div class="v"><span class="now sm">Baseline</span><span class="to">→</span><span class="goal">+40–60%</span></div><div class="c">from Google Analytics</div></div>
     <div class="kpi"><div class="l">New DOers / mo</div><div class="v"><span class="now sm">Baseline</span><span class="to">→</span><span class="goal">+50%</span></div><div class="c">signups &amp; bookings</div></div>
   </div>
+
+  <!-- SCORE BREAKDOWN -->
+  <div class="section">
+    <div class="eyebrow">Where the 67 comes from</div>
+    <h2>A 67 puts DoCurious ahead of most sites we audit.</h2>
+    <p class="deck">Two of five pillars &mdash; crawler access and off-site corroboration &mdash; are already strong. That's not a small thing; it's the part most businesses never get right. The real gap isn't building visibility from nothing, it's giving AI structured data to read &mdash; the fastest, cheapest fix in this whole plan.</p>
+    <div class="outcome" style="margin-top:16px"><b>What's already working:</b> Your site is fully open to every major AI crawler, and your off-site presence &mdash; real press coverage, a consistent LinkedIn, multiple startup directories &mdash; is already solid. Most sites we audit fail at both of those before we even get to content or schema.</div>
+    <div class="pillars num" style="margin-top:22px">
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Crawler access</span><span class="pbar-v">20/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:100%"></div></div><p class="pbar-note">All major AI engines (ChatGPT, Claude, Perplexity, Google) can already read your site in full.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Entity &amp; schema</span><span class="pbar-v">7/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:35%"></div></div><p class="pbar-note">A real, detailed founder bio exists &mdash; it's just entirely unstructured, so AI can't read it as data yet.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Content citability</span><span class="pbar-v">10/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:50%"></div></div><p class="pbar-note">Real FAQ content across 4 categories, not yet machine-readable as structured Q&amp;A.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Off-site corroboration</span><span class="pbar-v">15/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:75%"></div></div><p class="pbar-note">Real press (KGW News), a consistent LinkedIn, and multiple startup directories already corroborate you.</p></div>
+      <div class="pbar"><div class="pbar-top"><span class="pbar-l">Technical foundation</span><span class="pbar-v">15/20</span></div><div class="pbar-track"><div class="pbar-fill" style="width:75%"></div></div><p class="pbar-note">Clean modern platform, a working sitemap, and real meta tags already in place.</p></div>
+    </div>
+  </div>
+
+  <div class="rule"></div>
 
   <!-- TODAY -->
   <div class="section">
