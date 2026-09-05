@@ -689,8 +689,10 @@ const getCitationSignal = async (site, force = false, paid = false, wide = false
     // the engines directly is the better measurement, but it is a paid call, so it
     // belongs to the deep audit that a booked prospect gets.
     const runs = [];
+    let usedEngines = [];
     for (const q of (paid ? qset : [])) {
       const r = await runCitationFinder(q.query, bare);
+      if (!r.error && Array.isArray(r.engines) && r.engines.length) usedEngines = r.engines;
       if (!r.error) runs.push({ stage: q.stage, query: q.query, sources: r.total, named: r.inCount,
         answerNamed: !!r.namedInAnswer, unknown: r.unknownCount || 0,
         // linkedCitation/proseMention/status are the cited-vs-mentioned split for
@@ -707,7 +709,7 @@ const getCitationSignal = async (site, force = false, paid = false, wide = false
     }
     const rec = runs.length
       ? { total: runs.reduce((a, x) => a + x.sources, 0), inCount: runs.reduce((a, x) => a + x.named, 0),
-          sources: runs[0].cited.map(c => ({ host: c.host, appearsYou: c.you })), engines: ["Perplexity"], error: null }
+          sources: runs[0].cited.map(c => ({ host: c.host, appearsYou: c.you })), engines: usedEngines.length ? usedEngines : ["Perplexity"], error: null }
       : { error: "all queries failed", total: 0, inCount: 0, sources: [], engines: [] };
     const ident = { total: 0, inCount: 0, answer: "", engines: [], skipped: true };
     const answer = (!ident.error && ident.answer) || "";
@@ -1748,9 +1750,9 @@ const SERVER_INFO = {
 
 const SERVER_INSTRUCTIONS =
   "Specularis runs free AI visibility (GEO/AEO) audits. Call run_ai_visibility_audit with a website_url to get an " +
-  "instant snapshot of whether ChatGPT, Claude, and Perplexity can find and cite a site (AI crawler access, structured " +
+  "instant snapshot of whether ChatGPT, Claude, Perplexity, and Gemini can find and cite a site (AI crawler access, structured " +
   "data, llms.txt). Pass an email to also trigger the full scored 0–100 PDF report across all 5 pillars. Call " +
-  "find_ai_citations with a buyer query + a website to see the exact sources ChatGPT/Perplexity/Claude cite for that " +
+  "find_ai_citations with a buyer query + a website to see the exact sources ChatGPT/Perplexity/Claude/Gemini cite for that " +
   "query and whether the site appears in any of them. Use book_strategy_call to share the Specularis booking link.";
 
 // ---- build an MCP server instance ----
@@ -1762,7 +1764,7 @@ function buildServer() {
     {
       title: "Run AI Visibility Audit",
       description:
-        "Run a free AI visibility (GEO/AEO) audit on a website — checks whether ChatGPT, Claude, and Perplexity can find and cite it. Returns an instant snapshot of crawler access, structured data, and llms.txt. If an email is provided, a full scored report (0–100 across 5 pillars, with copy-paste fixes) is emailed as a PDF. Use this whenever a user asks to audit/check a site's AI visibility, GEO, AEO, or whether AI can find them.",
+        "Run a free AI visibility (GEO/AEO) audit on a website — checks whether ChatGPT, Claude, Perplexity, and Gemini can find and cite it. Returns an instant snapshot of crawler access, structured data, and llms.txt. If an email is provided, a full scored report (0–100 across 5 pillars, with copy-paste fixes) is emailed as a PDF. Use this whenever a user asks to audit/check a site's AI visibility, GEO, AEO, or whether AI can find them.",
       inputSchema: {
         website_url: z.string().describe("The website to audit, e.g. https://example.com"),
         email: z.string().email().optional().describe("Optional. If provided, the full scored PDF report is emailed here (and the user becomes a Specularis lead). Omit for just the instant snapshot."),
@@ -1849,7 +1851,7 @@ function buildServer() {
     {
       title: "Find AI Citation Sources",
       description:
-        "Given a buyer query (e.g. 'best real estate agent in Tampa') and a website domain, find the exact sources ChatGPT, Perplexity, and Claude cite when answering that query — and whether the domain appears in any of them. Returns the ranked source list (with which engine cites each) and an 'appears in X of N' gap. Use this whenever a user wants to know where AI gets its answers about their industry, which pages AI trusts for a query, or whether their business shows up in AI recommendations.",
+        "Given a buyer query (e.g. 'best real estate agent in Tampa') and a website domain, find the exact sources ChatGPT, Perplexity, Claude, and Gemini cite when answering that query — and whether the domain appears in any of them. Returns the ranked source list (with which engine cites each) and an 'appears in X of N' gap. Use this whenever a user wants to know where AI gets its answers about their industry, which pages AI trusts for a query, or whether their business shows up in AI recommendations.",
       inputSchema: {
         query: z.string().describe("The question a customer would ask AI, e.g. 'best personal injury lawyer in Miami'."),
         domain: z.string().describe("The website to check for, e.g. example.com"),
