@@ -1572,17 +1572,17 @@ const runCitationFinder = async (query, domain) => {
 const HEDGE_RE = /\b(it depends|depends on|there (isn't|is not|'s no|are no)|no single|no clear|varies|hard to say|difficult to (say|determine|pinpoint)|i (don't|do not) have|not able to|couldn't find|could not find|several (good )?options|many (good )?options|without more (info|context)|would need more)\b/i;
 
 // Expand a niche seed into ~8 realistic long-tail buyer queries via Claude.
-const expandSeedToQueries = async (seed) => {
+const expandSeedToQueries = async (seed, n = 8) => {
   if (!ANTHROPIC_API_KEY) return [];
-  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 30000);
+  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 40000);
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", signal: ctrl.signal,
       headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-opus-5", max_tokens: 600,
+        model: "claude-opus-5", max_tokens: Math.min(2400, 200 + n * 30),
         messages: [{ role: "user", content:
-          `A local business is in this niche: "${seed}". List 8 specific, realistic questions a customer might ask an AI assistant to find a business like this. Favor narrow segments, needs, and situations (for example "for first-time buyers", "open late", "for a specific problem or budget") over the single most generic query, because those tend to be less contested. Return ONLY a JSON array of 8 short question strings and nothing else.` }],
+          `A local business is in this niche: "${seed}". List ${n} specific, realistic questions a customer might ask an AI assistant to find a business like this. Span the full buyer journey: a few broad "best/top" questions, and many narrow ones by segment, need, situation, budget, and location (for example "for first-time buyers", "open late", "for a specific problem or budget"). Keep them distinct. Return ONLY a JSON array of ${n} short question strings and nothing else.` }],
       }),
     });
     if (!r.ok) return [];
@@ -1591,8 +1591,73 @@ const expandSeedToQueries = async (seed) => {
     const m = text.match(/\[[\s\S]*\]/);
     if (!m) return [];
     const arr = JSON.parse(m[0]);
-    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string" && x.trim()).slice(0, 8) : [];
+    return Array.isArray(arr) ? [...new Set(arr.filter((x) => typeof x === "string" && x.trim()))].slice(0, n) : [];
   } catch (e) { return []; } finally { clearTimeout(t); }
+};
+
+// Lightweight concurrency-limited map (keeps 40 live queries polite).
+const mapLimit = async (items, limit, fn) => {
+  const out = new Array(items.length); let i = 0;
+  const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+    while (i < items.length) { const idx = i++; out[idx] = await fn(items[idx], idx); }
+  });
+  await Promise.all(workers);
+  return out;
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const hostOf = (u) => (String(u).match(/^https?:\/\/([^\/]+)/i)?.[1] || "").toLowerCase().replace(/^www\./, "");
+
+// AI Citation Scoreboard scan (v1): a wide, affordable battery. Perplexity-first
+// so 40 questions stay cheap; "cited" = your domain is among the sources AI drew
+// from OR AI named you in the answer. Also tallies who gets cited instead.
+const runScoreboardScan = async (domain, seedIn, n = 40) => {
+  const site = normalizeUrl(domain);
+  const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
+  const variants = brandVariants(bare);
+  let seed = (seedIn || "").trim();
+  if (!seed) {
+    const p = await siteProfile(site).catch(() => null);
+    seed = p ? [p.category, [p.city, p.region].filter(Boolean).join(", ")].filter(Boolean).join(" in ") : bare;
+  }
+  const queries = await expandSeedToQueries(seed, n);
+  if (!queries.length) return { error: "Could not generate candidate queries (is ANTHROPIC_API_KEY set?)." };
+
+  const runs = await mapLimit(queries, 6, async (q) => {
+    let px = await callPerplexity(q);
+    if (px && px.error && /429/.test(String(px.error))) { await sleep(3000); px = await callPerplexity(q); }
+    if (!px || px.error) return { query: q, error: true };
+    const answer = px.choices?.[0]?.message?.content || "";
+    let hosts = [];
+    if (Array.isArray(px.search_results)) hosts = px.search_results.map((x) => hostOf(x.url));
+    else if (Array.isArray(px.citations)) hosts = px.citations.map(hostOf);
+    hosts = [...new Set(hosts.filter(Boolean))];
+    const youHost = hosts.some((h) => h === bare || h.endsWith("." + bare));
+    const named = mentionsBrand(answer, variants);
+    return { query: q, owned: youHost || named, hosts };
+  });
+
+  const valid = runs.filter((r) => !r.error);
+  const total = valid.length;
+  if (!total) return { error: "All queries failed (AI engines unreachable)." };
+  const cited = valid.filter((r) => r.owned).length;
+
+  const freq = new Map();
+  valid.forEach((r) => (r.hosts || []).forEach((h) => {
+    if (!h || h === bare || h.endsWith("." + bare)) return;
+    freq.set(h, (freq.get(h) || 0) + 1);
+  }));
+  const ranked = [...freq.entries()].sort((a, b) => b[1] - a[1])
+    .map(([host, c]) => ({ host, citedIn: c, ofQueries: total, joinable: isJoinable(host) }));
+  const topRival = ranked.find((x) => !x.joinable) || null;
+  const openings = ranked.filter((x) => x.joinable).slice(0, 5)
+    .map((x) => ({ host: x.host, m: `cited in ${x.citedIn} of ${total} answers · you’re not in it` }));
+
+  return {
+    host: bare, seed, total, cited,
+    runs: valid.map((r) => ({ query: r.query, owned: !!r.owned })),
+    rival: topRival ? { host: topRival.host, citedIn: topRival.citedIn, ofQueries: total } : null,
+    openings,
+  };
 };
 
 // Score how "open" a query is from a finder result (0-100, higher = more uncontested).
@@ -1907,6 +1972,19 @@ app.get(["/press", "/media-kit"], (_req, res) => {
 app.get("/scoreboard", (_req, res) => {
   if (!SCOREBOARD_HTML) return res.status(404).send("Not found");
   res.type("html").send(SCOREBOARD_HTML);
+});
+
+// Wide, affordable scoreboard scan (40 questions, Perplexity-first) + competitor.
+// Gated like the deep audit. ?d=<domain>&k=<DEEP_KEY>&seed=<niche?>&n=<count?>
+app.get("/api/scoreboard-scan", async (req, res) => {
+  if (!deepAuthorised(req)) return res.status(401).json({ error: "Unauthorized" });
+  if (!normalizeUrl(String(req.query.d || ""))) return res.status(400).json({ error: "Give me a domain" });
+  try {
+    const n = Math.min(40, Math.max(8, Number(req.query.n) || 40));
+    const out = await runScoreboardScan(String(req.query.d), String(req.query.seed || ""), n);
+    if (out.error) return res.status(502).json(out);
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: "scoreboard scan failed: " + String(e).slice(0, 160) }); }
 });
 
 // Opportunity Finder (v1) — gated (secret) + costly: expands a niche seed into
