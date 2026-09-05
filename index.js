@@ -86,6 +86,7 @@ const NOTION_AUDITS_DB = process.env.NOTION_AUDITS_DB || "98fb5088-506c-43a7-a2d
 const FINDER_IP_MAX = Number(process.env.FINDER_IP_MAX || 6);                    // requests per IP per window
 const FINDER_IP_WINDOW_MS = Number(process.env.FINDER_IP_WINDOW_MS || 15 * 60 * 1000); // 15 min
 const FINDER_DAY_MAX = Number(process.env.FINDER_DAY_MAX || 250);                // global runs per day
+const OPPORTUNITY_KEY = process.env.OPPORTUNITY_KEY || "";                       // secret gate for the expensive Opportunity Finder batch
 const BADGE_SECRET = process.env.BADGE_SECRET || "specularis-badge-dev-secret";
 const PORT = process.env.PORT || 3000;
 
@@ -1560,6 +1561,73 @@ const runCitationFinder = async (query, domain) => {
     engines: enginesUsed, sources };
 };
 
+// ---- Opportunity Finder (v1) ---------------------------------------------
+// Finds "openings": high-relevance questions in a niche where AI's answer is
+// thin or uncontested (few sources, no strong directory/publication, hedged
+// answer). These are the queries a business can move into and become the one
+// AI names. Demand-volume ranking is intentionally out of scope for v1 — we
+// only claim "uncontested", which the finder can measure directly and honestly.
+const HEDGE_RE = /\b(it depends|depends on|there (isn't|is not|'s no|are no)|no single|no clear|varies|hard to say|difficult to (say|determine|pinpoint)|i (don't|do not) have|not able to|couldn't find|could not find|several (good )?options|many (good )?options|without more (info|context)|would need more)\b/i;
+
+// Expand a niche seed into ~8 realistic long-tail buyer queries via Claude.
+const expandSeedToQueries = async (seed) => {
+  if (!ANTHROPIC_API_KEY) return [];
+  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", signal: ctrl.signal,
+      headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-opus-5", max_tokens: 600,
+        messages: [{ role: "user", content:
+          `A local business is in this niche: "${seed}". List 8 specific, realistic questions a customer might ask an AI assistant to find a business like this. Favor narrow segments, needs, and situations (for example "for first-time buyers", "open late", "for a specific problem or budget") over the single most generic query, because those tend to be less contested. Return ONLY a JSON array of 8 short question strings and nothing else.` }],
+      }),
+    });
+    if (!r.ok) return [];
+    const j = await r.json();
+    const text = (j.content || []).filter((b) => b?.type === "text").map((b) => b.text).join("");
+    const m = text.match(/\[[\s\S]*\]/);
+    if (!m) return [];
+    const arr = JSON.parse(m[0]);
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string" && x.trim()).slice(0, 8) : [];
+  } catch (e) { return []; } finally { clearTimeout(t); }
+};
+
+// Score how "open" a query is from a finder result (0-100, higher = more uncontested).
+const scoreOpenness = (r) => {
+  const sources = r.sources || [];
+  const total = sources.length;
+  const authRe = /Directory \/ review platform|Publishing \/ press platform|Knowledge base/;
+  const auth = sources.filter((s) => authRe.test(s.type)).length;
+  const authRatio = total ? auth / total : 0;
+  const hedged = HEDGE_RE.test(r.answer || "") || (r.namedInAnswer === false);
+  let score = 0; const signals = [];
+  if (total <= 3) { score += 40; signals.push(`only ${total} source${total === 1 ? "" : "s"} cited`); }
+  else if (total <= 6) { score += 20; signals.push(`few sources cited (${total})`); }
+  score += Math.round((1 - authRatio) * 30);
+  if (authRatio < 0.34) signals.push("no strong directory or publication dominates the answer");
+  if (hedged) { score += 30; signals.push("AI's answer names no clear business"); }
+  return { openness: Math.max(0, Math.min(100, score)), signals };
+};
+
+const runOpportunityFinder = async (seed) => {
+  const queries = await expandSeedToQueries(String(seed).slice(0, 140));
+  if (!queries.length) return { error: "Could not generate candidate queries (is ANTHROPIC_API_KEY set?)." };
+  const picked = queries.slice(0, 6); // cap the batch — each query is a full multi-engine finder run
+  const results = await Promise.all(picked.map(async (q) => {
+    const r = await runCitationFinder(q, "example.com"); // domain is a placeholder; we only assess the query
+    if (r.error) return { query: q, error: r.error };
+    const s = scoreOpenness(r);
+    return {
+      query: q, openness: s.openness, signals: s.signals,
+      total: r.total, engines: r.engines,
+      top_sources: (r.sources || []).slice(0, 6).map((x) => ({ name: x.title || x.host, host: x.host, type: x.type })),
+    };
+  }));
+  const ok = results.filter((x) => !x.error).sort((a, b) => b.openness - a.openness);
+  return { seed, checked: ok.length, candidates: ok, openings: ok.filter((x) => x.openness >= 50).slice(0, 5) };
+};
+
 // server identity (surfaced in the MCP handshake + directory listings)
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
@@ -1830,6 +1898,22 @@ app.get("/gap-image", (_req, res) => {
 app.get(["/press", "/media-kit"], (_req, res) => {
   if (!PRESS_HTML) return res.status(404).send("Not found");
   res.type("html").send(PRESS_HTML);
+});
+
+// Opportunity Finder (v1) — gated (secret) + costly: expands a niche seed into
+// candidate queries, runs each through the finder, ranks by "openness".
+// POST { seed }  header/query: key=OPPORTUNITY_KEY
+app.post("/opportunity-finder", async (req, res) => {
+  try {
+    const key = req.query.key || req.headers["x-opportunity-key"] || (req.body || {}).key;
+    if (!OPPORTUNITY_KEY || key !== OPPORTUNITY_KEY) return res.status(403).json({ error: "forbidden" });
+    const { seed } = req.body || {};
+    if (!seed) return res.status(400).json({ error: "seed is required (e.g. 'real estate agent in Tampa')" });
+    if (!mcpAllow()) return res.status(429).json({ error: "daily usage limit reached" });
+    const out = await runOpportunityFinder(seed);
+    if (out.error) return res.status(502).json(out);
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: "internal error" }); }
 });
 
 // AI Citation Source Finder — core endpoint. POST { query, domain } -> real cited sources + presence.
