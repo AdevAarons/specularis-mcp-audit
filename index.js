@@ -1622,17 +1622,49 @@ const runScoreboardScan = async (domain, seedIn, n = 40) => {
   const queries = await expandSeedToQueries(seed, n);
   if (!queries.length) return { error: "Could not generate candidate queries (is ANTHROPIC_API_KEY set?)." };
 
-  const runs = await mapLimit(queries, 6, async (q) => {
-    let px = await callPerplexity(q);
-    if (px && px.error && /429/.test(String(px.error))) { await sleep(3000); px = await callPerplexity(q); }
-    if (!px || px.error) return { query: q, error: true };
-    const answer = px.choices?.[0]?.message?.content || "";
+  // Run every question through all four engines the way the Citation Finder does, so the
+  // scoreboard reflects "cited across the engines your customers actually use", not just one.
+  const runs = await mapLimit(queries, 4, async (q) => {
+    // Perplexity gets a one-shot 429 retry; the other three run alongside it.
+    const pxP = (async () => {
+      let r = await callPerplexity(q).catch(() => null);
+      if (r && r.error && /429/.test(String(r.error))) { await sleep(2500); r = await callPerplexity(q).catch(() => null); }
+      return r;
+    })();
+    const [px, cl, gm, gpt] = await Promise.all([
+      pxP,
+      callClaude(q).catch(() => null),
+      callGemini(q).catch(() => null),
+      callChatGPT(q).catch(() => null),
+    ]);
+
     let hosts = [];
-    if (Array.isArray(px.search_results)) hosts = px.search_results.map((x) => hostOf(x.url));
-    else if (Array.isArray(px.citations)) hosts = px.citations.map(hostOf);
+    let text = "";
+    const okOf = (r) => r && !r.error;
+
+    if (okOf(px)) {
+      if (Array.isArray(px.search_results)) hosts.push(...px.search_results.map((x) => hostOf(x.url)));
+      else if (Array.isArray(px.citations)) hosts.push(...px.citations.map(hostOf));
+      text += " " + (px.choices?.[0]?.message?.content || "");
+    }
+    if (okOf(cl)) {
+      hosts.push(...extractClaudeSources(cl).map((s) => hostOf(s.url)));
+      if (Array.isArray(cl.content)) text += " " + cl.content.filter((b) => b.type === "text").map((b) => b.text).join(" ");
+    }
+    if (okOf(gm)) {
+      hosts.push(...extractGeminiSources(gm).map((s) => hostOf(s.url)));
+      text += " " + ((gm.candidates?.[0]?.content?.parts) || []).map((p) => p.text || "").join(" ");
+    }
+    if (okOf(gpt)) {
+      hosts.push(...extractChatGPTSources(gpt).map((s) => hostOf(s.url)));
+      const msg = (gpt.output || []).find((o) => o?.type === "message");
+      text += " " + ((msg?.content || []).map((c) => c.text || "").join(" "));
+    }
+
+    if (!okOf(px) && !okOf(cl) && !okOf(gm) && !okOf(gpt)) return { query: q, error: true };
     hosts = [...new Set(hosts.filter(Boolean))];
     const youHost = hosts.some((h) => h === bare || h.endsWith("." + bare));
-    const named = mentionsBrand(answer, variants);
+    const named = mentionsBrand(text, variants);
     return { query: q, owned: youHost || named, hosts };
   });
 
@@ -1652,8 +1684,15 @@ const runScoreboardScan = async (domain, seedIn, n = 40) => {
   const openings = ranked.filter((x) => x.joinable).slice(0, 5)
     .map((x) => ({ host: x.host, m: `cited in ${x.citedIn} of ${total} answers · you’re not in it` }));
 
+  const engines = [
+    PERPLEXITY_API_KEY && "Perplexity",
+    ANTHROPIC_API_KEY && "Claude",
+    GEMINI_API_KEY && "Gemini",
+    OPENAI_API_KEY && "ChatGPT",
+  ].filter(Boolean);
+
   return {
-    host: bare, seed, total, cited,
+    host: bare, seed, total, cited, engines,
     runs: valid.map((r) => ({ query: r.query, owned: !!r.owned })),
     rival: topRival ? { host: topRival.host, citedIn: topRival.citedIn, ofQueries: total } : null,
     openings,

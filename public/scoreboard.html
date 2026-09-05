@@ -93,7 +93,7 @@
       <div class="matrix" id="matrix"></div>
     </div>
     <div class="vs" id="vs" style="display:none"></div>
-    <div class="cardfoot"><div class="note">Live scan across your category's key buyer questions · Specularis</div><div class="wm">SPECULARIS</div></div>
+    <div class="cardfoot"><div class="note" id="foot-note">Live scan across your category's key buyer questions &middot; Specularis</div><div class="wm">SPECULARIS</div></div>
   </div>
 
   <div id="detail"></div>
@@ -107,7 +107,7 @@
   var S=document.getElementById('status');
 
   var STEMS=["who are the best real estate agents","top real estate agent near me","best agent for first-time buyers","how do I choose a real estate agent","what to look for in a realtor","best agent for luxury homes","agent for relocating families","is it worth hiring a realtor","compare real estate agents in the area","best agent for selling quickly","top realtors 2026","best agent for condos","best agent for investment properties","realtor for downsizing","agent for military families","best agent for new construction","realtor who speaks Spanish","best agent for waterfront homes","agent for first-time sellers","best low-commission agent","realtor for probate sales","best agent for fixer-uppers","agent for out-of-state buyers","best luxury real estate agent","realtor for 55+ communities","best agent for short sales","agent for vacation-rental investors","top-rated realtor reviews","best agent for negotiating price","realtor for townhomes","best agent for a fast closing","agent for divorce home sales","best realtor for buyers","best realtor for sellers","agent for historic homes","realtor for a specific school district","best agent for cash buyers","best agent for a starter home","realtor for eco-friendly homes","who is the best realtor for me"];
-  var DEMO={ host:"your-business.com", host2:"a competing brokerage",
+  var DEMO={ host:"your-business.com", host2:"a competing brokerage", engines:["Perplexity","Claude","Gemini","ChatGPT"],
     runs: STEMS.map(function(q,i){ return { query:q, owned:i<27 }; }),
     rival:{ host:"a competing brokerage", citedIn:18, ofQueries:40 },
     openings:[ {host:"expertise.com", m:"cited in 22 of 40 answers · you’re not in it"},
@@ -124,6 +124,9 @@
     document.getElementById('sub').textContent = demo
       ? 'Across the key questions customers ask AI, here is what this business wins, what it is missing, and how it stacks up against its top competitor.'
       : 'For '+m.host+', across the key questions customers ask AI in this category.';
+    var eng=(m.engines||[]);
+    if(eng.length){ var el=eng.length>1?eng.slice(0,-1).join(', ')+' & '+eng[eng.length-1]:eng[0];
+      document.getElementById('foot-note').innerHTML='Scanned across '+esc(el)+' · Specularis'; }
     document.getElementById('x').textContent=cited;
     document.getElementById('n').textContent=total;
     document.getElementById('lg-own').textContent=cited+' owned';
