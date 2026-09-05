@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>AI Citation Scoreboard</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{ --ink:#161616; --sec:#4a5261; --muted:#8a93a3; --faint:#b7bfce; --line:#e8ebf0; --surface:#fbfcfe; --blue:#2467E3; --blue-dk:#1c4fa6; --wash:#f2f6ff; --green:#1c7a42; --green-wash:#eaf7f0; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:#f4f7fc; font-family:'Satoshi',system-ui,sans-serif; color:var(--ink); -webkit-font-smoothing:antialiased; }
+  .page{ max-width:1240px; margin:0 auto; padding:24px 20px 80px; }
+  .bar{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .btn{ font-family:inherit; font-size:14px; font-weight:700; color:#fff; background:var(--blue); border:0; border-radius:40px; padding:11px 20px; cursor:pointer; }
+  .btn.ghost{ background:transparent; color:var(--sec); border:1px solid var(--line); }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .status{ color:var(--muted); font-size:13.5px; margin-right:auto; }
+
+  /* downloadable scoreboard card */
+  #card{ width:1200px; max-width:100%; background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%); border:1px solid var(--line); border-radius:20px; padding:44px 50px 40px; }
+  .top{ display:flex; align-items:center; gap:12px; }
+  .eyebrow{ color:var(--blue); font-weight:700; font-size:13px; letter-spacing:.2em; text-transform:uppercase; }
+  .tag{ font-size:10.5px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--blue); border:1px solid rgba(36,103,227,.4); border-radius:20px; padding:3px 10px; }
+  h1{ font-weight:900; font-size:32px; line-height:1.1; letter-spacing:-.025em; margin:14px 0 6px; }
+  .sub{ color:var(--sec); font-size:15.5px; font-weight:500; max-width:70ch; }
+  .cardrow{ display:flex; gap:40px; margin-top:24px; align-items:center; }
+  .big{ width:250px; flex-shrink:0; }
+  .big .n{ font-weight:900; font-size:82px; line-height:.86; color:var(--blue); letter-spacing:-.04em; }
+  .big .n .d{ font-size:44px; color:var(--faint); }
+  .big .l{ color:var(--sec); font-size:14.5px; font-weight:600; margin-top:12px; line-height:1.4; }
+  .legend{ margin-top:18px; }
+  .lg{ display:flex; align-items:center; gap:9px; margin-bottom:8px; font-size:13.5px; font-weight:600; color:var(--sec); }
+  .lg .sw{ width:15px; height:15px; border-radius:50%; } .lg .own{ background:var(--blue); } .lg .miss{ background:#fff; border:2px solid #cfd6e0; }
+  .lg b{ color:var(--ink); }
+  .matrix{ flex:1; display:grid; gap:12px; }
+  .cell{ width:100%; aspect-ratio:1; border-radius:50%; }
+  .cell.own{ background:var(--blue); box-shadow:0 3px 9px rgba(36,103,227,.26); }
+  .cell.miss{ background:#fff; border:2px solid #d5dae3; }
+  .cardfoot{ display:flex; justify-content:space-between; align-items:center; margin-top:26px; border-top:1px solid var(--line); padding-top:16px; }
+  .cardfoot .note{ color:var(--muted); font-size:12px; } .cardfoot .wm{ font-weight:900; font-size:17px; letter-spacing:.14em; }
+
+  /* detail below (not part of the image) */
+  .cols{ display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:26px; }
+  .col{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px 22px; }
+  .col h2{ font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:800; margin-bottom:14px; }
+  .q{ display:flex; align-items:flex-start; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); font-size:14.5px; }
+  .q:last-child{ border-bottom:0; }
+  .q .ic{ width:18px; height:18px; border-radius:50%; flex-shrink:0; margin-top:1px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; }
+  .q.own .ic{ background:var(--blue); color:#fff; } .q.miss .ic{ background:#eef0f4; color:#8a93a3; }
+  .q .txt{ color:var(--ink); } .q.miss .txt{ color:var(--sec); }
+  .open{ background:var(--wash); border:1px solid #dce6fb; border-radius:16px; padding:20px 22px; margin-top:20px; }
+  .open h2{ font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--blue-dk); font-weight:800; margin-bottom:6px; }
+  .open p{ color:var(--sec); font-size:14px; margin-bottom:12px; }
+  .opit{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid #e3ebfb; font-size:14.5px; }
+  .opit:last-child{ border-bottom:0; }
+  .opit .h{ font-weight:700; } .opit .m{ color:var(--muted); font-size:13px; }
+  #err{ color:#b93a2e; font-weight:600; padding:20px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="bar">
+    <span class="status" id="status"></span>
+    <button class="btn ghost" id="again" style="display:none" onclick="location.reload()">Reload</button>
+    <button class="btn" id="dl" disabled onclick="downloadCard()">Download scoreboard</button>
+  </div>
+
+  <div id="card">
+    <div class="top"><span class="eyebrow">AI Citation Scoreboard</span><span class="tag" id="tag">Illustrative</span></div>
+    <h1 id="h1">&nbsp;</h1>
+    <div class="sub" id="sub"></div>
+    <div class="cardrow">
+      <div class="big">
+        <div class="n"><span id="x">–</span><span class="d">/<span id="n">–</span></span></div>
+        <div class="l">questions where AI cites this business</div>
+        <div class="legend">
+          <div class="lg"><span class="sw own"></span><b id="lg-own">–</b>&nbsp;&middot;&nbsp;defend these</div>
+          <div class="lg"><span class="sw miss"></span><b id="lg-miss">–</b>&nbsp;&middot;&nbsp;the next targets</div>
+        </div>
+      </div>
+      <div class="matrix" id="matrix"></div>
+    </div>
+    <div class="cardfoot"><div class="note">Live scan across your category's key buyer questions · Specularis</div><div class="wm">SPECULARIS</div></div>
+  </div>
+
+  <div id="detail"></div>
+  <div id="err"></div>
+</div>
+
+<script>
+  var P=new URLSearchParams(location.search);
+  var d=(P.get('d')||'').trim(), k=(P.get('k')||'').trim();
+  var demo=P.get('demo')==='1' || (!d);
+  var S=document.getElementById('status');
+
+  var DEMO={
+    host:"your-business.com", total:12, cited:8,
+    runs:[
+      {query:"who are the best real estate agents in the area", owned:true},
+      {query:"top real estate agent near me", owned:true},
+      {query:"best agent for first-time buyers", owned:false},
+      {query:"how do I choose a real estate agent", owned:true},
+      {query:"what should I look for in a realtor", owned:true},
+      {query:"best agent for luxury condos", owned:false},
+      {query:"agent for relocating families", owned:false},
+      {query:"is it worth hiring a realtor", owned:true},
+      {query:"compare real estate agents in the area", owned:true},
+      {query:"best agent for selling quickly", owned:false},
+      {query:"top realtors 2026", owned:true},
+      {query:"who are the best real estate agents", owned:true}
+    ],
+    openings:[
+      {host:"expertise.com", m:"cited in 7 of 12 answers · you're not in it"},
+      {host:"fastexpert.com", m:"cited in 5 of 12 answers · you're not in it"},
+      {host:"a local “best of” roundup", m:"cited in 4 of 12 answers · you're not in it"}
+    ]
+  };
+
+  function grid(n){ var cols = n<=10?n:(n<=20?10:(n<=30?10:10)); document.getElementById('matrix').style.gridTemplateColumns='repeat('+Math.min(cols,10)+',1fr)'; }
+
+  function render(m){
+    document.getElementById('tag').textContent = demo?'Illustrative':'Live result';
+    document.getElementById('h1').textContent = 'Cited in '+m.cited+' of the '+m.total+' questions AI gets asked in this category';
+    document.getElementById('sub').textContent = demo
+      ? 'Across the key questions customers ask AI, here is what this business wins, what it is missing, and where the next wins are.'
+      : 'For '+m.host+', across the key questions customers ask AI in this category.';
+    document.getElementById('x').textContent=m.cited;
+    document.getElementById('n').textContent=m.total;
+    document.getElementById('lg-own').textContent=m.cited+' owned';
+    document.getElementById('lg-miss').textContent=(m.total-m.cited)+' missing';
+    grid(m.total);
+    var mx=document.getElementById('matrix'); mx.innerHTML='';
+    for(var i=0;i<m.total;i++){ var c=document.createElement('div'); c.className='cell '+(i<m.cited?'own':'miss'); mx.appendChild(c); }
+
+    var owned=(m.runs||[]).filter(function(r){return r.owned;});
+    var missing=(m.runs||[]).filter(function(r){return !r.owned;});
+    var det=document.getElementById('detail'); det.innerHTML='';
+    var cols=document.createElement('div'); cols.className='cols';
+    cols.innerHTML =
+      '<div class="col"><h2>You own '+owned.length+' &middot; defend these</h2>'+
+        owned.map(function(r){return '<div class="q own"><span class="ic">✓</span><span class="txt">'+esc(r.query)+'</span></div>';}).join('')+'</div>'+
+      '<div class="col"><h2>Missing '+missing.length+' &middot; your next targets</h2>'+
+        (missing.length?missing.map(function(r){return '<div class="q miss"><span class="ic">×</span><span class="txt">'+esc(r.query)+'</span></div>';}).join(''):'<div class="q"><span class="txt" style="color:#8a93a3">You appear in every question we tested.</span></div>')+'</div>';
+    det.appendChild(cols);
+
+    if((m.openings||[]).length){
+      var op=document.createElement('div'); op.className='open';
+      op.innerHTML='<h2>Fastest openings</h2><p>Sources AI keeps citing for this category that you are not in yet. Get cited in these and you close the gap fastest.</p>'+
+        m.openings.map(function(o){return '<div class="opit"><span class="h">'+esc(o.host)+'</span><span class="m">'+esc(o.m)+'</span></div>';}).join('');
+      det.appendChild(op);
+    }
+    document.getElementById('dl').disabled=false; S.textContent='';
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  function downloadCard(){
+    var card=document.getElementById('card'), b=document.getElementById('dl'); b.disabled=true; S.textContent='Rendering…';
+    html2canvas(card,{scale:2, backgroundColor:'#ffffff', logging:false}).then(function(cv){
+      cv.toBlob(function(bl){ var a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='ai-citation-scoreboard.png'; document.body.appendChild(a); a.click(); a.remove(); S.textContent='Downloaded.'; b.disabled=false; },'image/png');
+    }).catch(function(){ S.textContent='Could not render — screenshot the card instead.'; b.disabled=false; });
+  }
+
+  if(demo){ render(DEMO); }
+  else {
+    S.textContent='Running a deep scan across your category… this takes a minute.';
+    fetch('/api/deep-scan?save=0&d='+encodeURIComponent(d)+(k?'&k='+encodeURIComponent(k):''))
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+      .then(function(res){
+        var j=res.j;
+        if(!res.ok || j.error){ document.getElementById('err').textContent = j.error || 'Something went wrong.'; document.getElementById('again').style.display=''; S.textContent=''; return; }
+        if(j.inconclusive){ document.getElementById('err').textContent = 'Scan inconclusive: '+(j.error||'the site blocked the scan.'); S.textContent=''; return; }
+        var runs=((j.citation||{}).runs||[]).map(function(r){ return { query:r.query, owned:!!(r.named>0 || r.answerNamed) }; });
+        var openings=(j.targets||[]).slice(0,5).map(function(t){ return { host:t.host, m:'cited in '+t.citedIn+' of '+t.ofQueries+' answers · you’re not in it' }; });
+        render({ host:j.host, total:(j.citation||{}).queriesTested||runs.length, cited:(j.citation||{}).queriesWhereCited||0, runs:runs, openings:openings });
+      })
+      .catch(function(){ document.getElementById('err').textContent='Network error.'; document.getElementById('again').style.display=''; S.textContent=''; });
+  }
+</script>
+</body>
+</html>

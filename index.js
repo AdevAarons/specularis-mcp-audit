@@ -42,6 +42,8 @@ let DASHBOARD_HTML = "";
 try { DASHBOARD_HTML = readFileSync(join(__dirname, "public", "dashboard.html"), "utf8"); } catch (e) {}
 let DEEP_HTML = "";
 try { DEEP_HTML = readFileSync(join(__dirname, "public", "deep.html"), "utf8"); } catch (e) {}
+let SCOREBOARD_HTML = "";
+try { SCOREBOARD_HTML = readFileSync(join(__dirname, "public", "scoreboard.html"), "utf8"); } catch (e) {}
 let WHAT_WE_DO_HTML = "";
 try { WHAT_WE_DO_HTML = readFileSync(join(__dirname, "public", "what-we-do.html"), "utf8"); } catch (e) {}
 let SCHEMA_V3_TXT = "";
@@ -1898,6 +1900,13 @@ app.get("/gap-image", (_req, res) => {
 app.get(["/press", "/media-kit"], (_req, res) => {
   if (!PRESS_HTML) return res.status(404).send("Not found");
   res.type("html").send(PRESS_HTML);
+});
+
+// AI Citation Scoreboard — live per-business report built on the deep scan.
+// ?d=<domain>&k=<DEEP_KEY> runs a real scan; ?demo=1 previews with sample data.
+app.get("/scoreboard", (_req, res) => {
+  if (!SCOREBOARD_HTML) return res.status(404).send("Not found");
+  res.type("html").send(SCOREBOARD_HTML);
 });
 
 // Opportunity Finder (v1) — gated (secret) + costly: expands a niche seed into
