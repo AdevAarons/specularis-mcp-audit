@@ -192,7 +192,7 @@
     document.getElementById('h1').textContent = 'Cited in '+cited+' of the '+total+' questions AI gets asked in this category';
     document.getElementById('sub').textContent = demo
       ? 'Across the key questions customers ask AI, here is what this business wins, what it is missing, and how it stacks up against its top competitor.'
-      : 'For '+m.host+', across the key questions customers ask AI in this category.';
+      : 'For '+m.host+', across the key questions customers ask AI about '+(m.seed||'this category')+'.';
     var eng=(m.engines||[]);
     if(eng.length){ var el=eng.length>1?eng.slice(0,-1).join(', ')+' & '+eng[eng.length-1]:eng[0];
       document.getElementById('foot-note').innerHTML='Scanned across '+esc(el)+' · Specularis'; }

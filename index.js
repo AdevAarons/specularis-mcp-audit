@@ -1714,18 +1714,39 @@ const scoreboardCore = async ({ label, variants, citeHost, seed, queries }) => {
   };
 };
 
-// Website mode: credit the domain when it is cited, and derive the category seed from the site.
+// Recover the spaced brand name from the site <title> so name-in-answer matching works for
+// multi-word businesses ("omegapropertyinvestments" -> "Omega Property Investments"). Only
+// keeps title segments that actually correspond to the domain, so taglines don't leak in.
+const brandFromTitle = (title, bare) => {
+  const brand = String(bare || "").split(".")[0].toLowerCase();
+  if (brand.length < 4) return [];
+  const squash = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const out = [];
+  for (const s of String(title || "").split(/[|\-–—:·•]/).map((x) => x.trim())) {
+    if (s.length < 4 || s.length > 60) continue;
+    const q = squash(s);
+    if (q && (q === brand || brand.includes(q) || q.includes(brand))) out.push(s);
+  }
+  return [...new Set(out)];
+};
+
+// Website mode: credit the domain when it is cited, name-match the real business name too,
+// and build the category seed from what the site actually says it does (service, not the
+// nonexistent `category` field that silently left the seed location-only).
 const runScoreboardScan = async (domain, seedIn, n = 40) => {
   const site = normalizeUrl(domain);
   const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
+  const profile = await siteProfile(site).catch(() => null);
   let seed = (seedIn || "").trim();
   if (!seed) {
-    const p = await siteProfile(site).catch(() => null);
-    seed = p ? [p.category, [p.city, p.region].filter(Boolean).join(", ")].filter(Boolean).join(" in ") : bare;
+    seed = (profile && profile.service)
+      ? [profile.service, [profile.city, profile.region].filter(Boolean).join(", ")].filter(Boolean).join(" in ")
+      : bare;
   }
   const queries = await expandSeedToQueries(seed, n);
   if (!queries.length) return { error: "Could not generate candidate queries (is ANTHROPIC_API_KEY set?)." };
-  return scoreboardCore({ label: bare, variants: brandVariants(bare), citeHost: bare, seed, queries });
+  const variants = [...new Set([...brandVariants(bare), ...brandFromTitle(profile && profile.title, bare)])];
+  return scoreboardCore({ label: bare, variants, citeHost: bare, seed, queries });
 };
 
 // Name mode: for a person/business with no website. A "win" is AI naming them in its answer.
