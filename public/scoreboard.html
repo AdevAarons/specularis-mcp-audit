@@ -11,6 +11,7 @@
 <style>
   :root{ --ink:#161616; --sec:#4a5261; --muted:#8a93a3; --faint:#b7bfce; --line:#e8ebf0; --surface:#fbfcfe; --blue:#2467E3; --blue-dk:#1c4fa6; --wash:#f2f6ff; }
   *{ box-sizing:border-box; margin:0; padding:0; }
+  [hidden]{ display:none !important; }
   body{ background:#f4f7fc; font-family:'Satoshi',system-ui,sans-serif; color:var(--ink); -webkit-font-smoothing:antialiased; }
   .page{ max-width:1240px; margin:0 auto; padding:24px 20px 80px; }
   .bar{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
@@ -79,17 +80,52 @@
   .smart .cta .t{ font-size:14px; color:#cdd8ee; font-weight:600; }
   .smart .cta a{ font-size:14px; font-weight:800; color:#fff; background:var(--blue); border-radius:40px; padding:11px 22px; text-decoration:none; white-space:nowrap; }
   #err{ color:#b93a2e; font-weight:600; padding:20px 0; }
+
+  #start{ max-width:520px; margin:6vh auto 0; background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%); border:1px solid var(--line); border-radius:20px; padding:40px 40px 36px; }
+  #start .eyebrow{ margin-bottom:14px; display:block; }
+  #start h1{ font-size:28px; font-weight:900; letter-spacing:-.025em; margin:0 0 8px; }
+  #start .sub{ color:var(--sec); font-size:15px; margin-bottom:26px; }
+  #start label{ display:block; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 8px; }
+  #start .fld{ margin-bottom:20px; }
+  #start input{ width:100%; font-family:inherit; font-size:16px; font-weight:500; color:var(--ink); background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:14px 16px; outline:none; }
+  #start input:focus{ border-color:var(--blue); }
+  #start .row2{ display:flex; align-items:flex-end; gap:12px; }
+  #start .row2 .fld{ flex:1; margin-bottom:0; }
+  #start .remember{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--sec); font-weight:600; margin:-8px 0 22px; cursor:pointer; }
+  #start .remember input{ width:auto; }
+  #start .go{ width:100%; font-family:inherit; font-size:16px; font-weight:800; color:#fff; background:var(--blue); border:0; border-radius:40px; padding:15px; cursor:pointer; }
+  #start .go:disabled{ opacity:.5; cursor:default; }
+  #start .hint{ color:var(--muted); font-size:12.5px; margin-top:14px; text-align:center; }
+  #start .ferr{ color:#b93a2e; font-size:13.5px; font-weight:600; margin-top:12px; min-height:18px; }
 </style>
 </head>
 <body>
 <div class="page">
-  <div class="bar">
+  <div id="start" hidden>
+    <span class="eyebrow">AI Citation Scoreboard</span>
+    <h1>Run a scoreboard</h1>
+    <div class="sub">Enter a business's website. We'll ask ChatGPT, Perplexity, Claude and Gemini the 40 questions their customers ask, and score how often AI names them.</div>
+    <div class="fld">
+      <label for="f-domain">Website</label>
+      <input id="f-domain" type="text" placeholder="theirbusiness.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="fld">
+      <label for="f-key">Access key</label>
+      <input id="f-key" type="password" placeholder="Your DEEP_KEY" autocomplete="off">
+    </div>
+    <label class="remember"><input id="f-remember" type="checkbox" checked> Remember my key on this device</label>
+    <button class="go" id="f-go">Run scoreboard</button>
+    <div class="ferr" id="f-err"></div>
+    <div class="hint">Takes a minute or two · runs a live scan across all four engines</div>
+  </div>
+
+  <div class="bar" id="bar" hidden>
     <span class="status" id="status"></span>
-    <button class="btn ghost" id="again" style="display:none" onclick="location.reload()">Reload</button>
+    <button class="btn ghost" id="again" style="display:none" onclick="location.href=location.pathname">Run another</button>
     <button class="btn" id="dl" disabled onclick="downloadCard()">Download scoreboard</button>
   </div>
 
-  <div id="card">
+  <div id="card" hidden>
     <div class="top"><span class="eyebrow">AI Citation Scoreboard</span><span class="tag" id="tag">Illustrative</span></div>
     <h1 id="h1">&nbsp;</h1>
     <div class="sub" id="sub"></div>
@@ -115,8 +151,9 @@
 <script>
   var P=new URLSearchParams(location.search);
   var d=(P.get('d')||'').trim(), k=(P.get('k')||'').trim(), seed=(P.get('seed')||'').trim();
-  var demo=P.get('demo')==='1' || (!d);
+  var demo=P.get('demo')==='1';
   var S=document.getElementById('status');
+  var LS_KEY='spec_scoreboard_key';
 
   var STEMS=["who are the best real estate agents","top real estate agent near me","best agent for first-time buyers","how do I choose a real estate agent","what to look for in a realtor","best agent for luxury homes","agent for relocating families","is it worth hiring a realtor","compare real estate agents in the area","best agent for selling quickly","top realtors 2026","best agent for condos","best agent for investment properties","realtor for downsizing","agent for military families","best agent for new construction","realtor who speaks Spanish","best agent for waterfront homes","agent for first-time sellers","best low-commission agent","realtor for probate sales","best agent for fixer-uppers","agent for out-of-state buyers","best luxury real estate agent","realtor for 55+ communities","best agent for short sales","agent for vacation-rental investors","top-rated realtor reviews","best agent for negotiating price","realtor for townhomes","best agent for a fast closing","agent for divorce home sales","best realtor for buyers","best realtor for sellers","agent for historic homes","realtor for a specific school district","best agent for cash buyers","best agent for a starter home","realtor for eco-friendly homes","who is the best realtor for me"];
   var DEMO={ host:"your-business.com", host2:"a competing brokerage", engines:["Perplexity","Claude","Gemini","ChatGPT"],
@@ -186,7 +223,8 @@
         '<div class="cta"><span class="t">This is a preview. The full Opportunity Finder maps every uncontested question in your market.</span><a href="https://specularisinc.com/free-audit">Ask us to run it →</a></div>';
       det.appendChild(sm);
     }
-    document.getElementById('dl').disabled=false; S.textContent='';
+    document.getElementById('dl').disabled=false;
+    document.getElementById('again').style.display=''; S.textContent='';
   }
 
   function downloadCard(){
@@ -196,10 +234,16 @@
     }).catch(function(){ S.textContent='Could not render — screenshot the card instead.'; b.disabled=false; });
   }
 
-  if(demo){ render(DEMO); }
-  else {
+  function showResults(){
+    document.getElementById('start').hidden=true;
+    document.getElementById('bar').hidden=false;
+    document.getElementById('card').hidden=false;
+  }
+
+  function runLive(domain, key, seedv){
+    showResults();
     S.textContent='Running the scoreboard scan across ~40 questions… this takes a minute or two.';
-    var url='/api/scoreboard-scan?d='+encodeURIComponent(d)+(k?'&k='+encodeURIComponent(k):'')+(seed?'&seed='+encodeURIComponent(seed):'');
+    var url='/api/scoreboard-scan?d='+encodeURIComponent(domain)+(key?'&k='+encodeURIComponent(key):'')+(seedv?'&seed='+encodeURIComponent(seedv):'');
     fetch(url).then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
       .then(function(res){
         var j=res.j;
@@ -208,6 +252,36 @@
       })
       .catch(function(){ document.getElementById('err').textContent='Network error.'; document.getElementById('again').style.display=''; S.textContent=''; });
   }
+
+  function submitForm(){
+    var dom=document.getElementById('f-domain').value.trim().replace(/^https?:\/\//i,'').replace(/\/.*$/,'');
+    var key=document.getElementById('f-key').value.trim();
+    var fe=document.getElementById('f-err');
+    if(!dom){ fe.textContent='Enter a website.'; return; }
+    if(!key){ fe.textContent='Enter your access key.'; return; }
+    fe.textContent='';
+    try{ if(document.getElementById('f-remember').checked) localStorage.setItem(LS_KEY,key); else localStorage.removeItem(LS_KEY); }catch(e){}
+    try{ history.replaceState(null,'',location.pathname+'?d='+encodeURIComponent(dom)); }catch(e){}
+    runLive(dom, key, '');
+  }
+
+  function showForm(){
+    var s=document.getElementById('start'); s.hidden=false;
+    try{ var saved=localStorage.getItem(LS_KEY); if(saved) document.getElementById('f-key').value=saved; }catch(e){}
+    document.getElementById('f-go').addEventListener('click', submitForm);
+    ['f-domain','f-key'].forEach(function(id){
+      document.getElementById(id).addEventListener('keydown', function(e){ if(e.key==='Enter') submitForm(); });
+    });
+    (document.getElementById('f-domain').value ? document.getElementById('f-go') : document.getElementById('f-domain')).focus();
+  }
+
+  // Route: ?demo=1 → demo card · ?d=domain → live run (key from URL or remembered) · nothing → the form
+  if(demo){ showResults(); render(DEMO); }
+  else if(d){
+    var key=k; if(!key){ try{ key=localStorage.getItem(LS_KEY)||''; }catch(e){} }
+    runLive(d, key, seed);
+  }
+  else { showForm(); }
 </script>
 </body>
 </html>
