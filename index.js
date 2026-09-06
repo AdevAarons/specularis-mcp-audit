@@ -1693,11 +1693,26 @@ const runScoreboardScan = async (domain, seedIn, n = 40) => {
     OPENAI_API_KEY && "ChatGPT",
   ].filter(Boolean);
 
+  // A glimpse of the Opportunity Finder, built from data this scan already has:
+  // the questions you DON'T win where AI cited the fewest sources are the least
+  // locked-down — the fastest lanes to own. The full tool scores this properly.
+  const smartRecs = valid
+    .filter((r) => !r.owned)
+    .map((r) => ({ query: r.query, sources: (r.hosts || []).length }))
+    .sort((a, b) => a.sources - b.sources)
+    .slice(0, 3)
+    .map((x) => ({
+      query: x.query,
+      note: x.sources <= 3
+        ? `only ${x.sources} source${x.sources === 1 ? "" : "s"} cited — wide open`
+        : "no clear business owns this yet",
+    }));
+
   return {
     host: bare, seed, total, cited, engines,
     runs: valid.map((r) => ({ query: r.query, owned: !!r.owned })),
     rival: topRival ? { host: topRival.host, citedIn: topRival.citedIn, ofQueries: total } : null,
-    openings,
+    openings, smartRecs,
   };
 };
 

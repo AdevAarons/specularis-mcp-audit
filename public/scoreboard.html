@@ -66,6 +66,18 @@
   .opit{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid #e3ebfb; font-size:14.5px; }
   .opit:last-child{ border-bottom:0; }
   .opit .h{ font-weight:700; } .opit .m{ color:var(--muted); font-size:13px; }
+
+  .smart{ background:linear-gradient(135deg,#161d2e 0%,#1d2c53 100%); border-radius:18px; padding:24px 26px; margin-top:20px; color:#fff; }
+  .smart .eb{ display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#8fb4ff; }
+  .smart h2{ font-size:19px; font-weight:900; letter-spacing:-.02em; margin:10px 0 4px; }
+  .smart .lede{ color:#aab4c8; font-size:14px; max-width:70ch; margin-bottom:16px; }
+  .srec{ display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid rgba(255,255,255,.09); }
+  .srec:last-of-type{ border-bottom:0; }
+  .srec .qz{ font-weight:700; font-size:14.5px; color:#eaf1ff; }
+  .srec .tag2{ margin-left:auto; flex-shrink:0; font-size:11.5px; font-weight:700; color:#8fb4ff; background:rgba(77,139,255,.16); border:1px solid rgba(77,139,255,.32); border-radius:20px; padding:4px 11px; white-space:nowrap; }
+  .smart .cta{ display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:18px; padding-top:16px; border-top:1px solid rgba(255,255,255,.12); flex-wrap:wrap; }
+  .smart .cta .t{ font-size:14px; color:#cdd8ee; font-weight:600; }
+  .smart .cta a{ font-size:14px; font-weight:800; color:#fff; background:var(--blue); border-radius:40px; padding:11px 22px; text-decoration:none; white-space:nowrap; }
   #err{ color:#b93a2e; font-weight:600; padding:20px 0; }
 </style>
 </head>
@@ -112,7 +124,10 @@
     rival:{ host:"a competing brokerage", citedIn:18, ofQueries:40 },
     openings:[ {host:"expertise.com", m:"cited in 22 of 40 answers · you’re not in it"},
       {host:"fastexpert.com", m:"cited in 15 of 40 answers · you’re not in it"},
-      {host:"a local “best of” roundup", m:"cited in 11 of 40 answers · you’re not in it"} ] };
+      {host:"a local “best of” roundup", m:"cited in 11 of 40 answers · you’re not in it"} ],
+    smartRecs:[ {query:"realtor for eco-friendly homes", note:"only 2 sources cited — wide open"},
+      {query:"agent for historic homes", note:"only 3 sources cited — wide open"},
+      {query:"best agent for cash buyers", note:"no clear business owns this yet"} ] };
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
@@ -160,6 +175,16 @@
       op.innerHTML='<h2>Fastest openings</h2><p>Sources AI keeps citing for this category that you are not in yet. Get cited in these and you close the gap fastest.</p>'+
         m.openings.map(function(o){return '<div class="opit"><span class="h">'+esc(o.host)+'</span><span class="m">'+esc(o.m)+'</span></div>';}).join('');
       det.appendChild(op);
+    }
+
+    if((m.smartRecs||[]).length){
+      var sm=document.createElement('div'); sm.className='smart';
+      sm.innerHTML='<span class="eb">✦ Smart recommendations</span>'+
+        '<h2>Questions you could own next</h2>'+
+        '<div class="lede">A glimpse from our Opportunity Finder: questions your customers ask AI where almost no business has been named yet. These are the fastest lanes to claim before a competitor does.</div>'+
+        m.smartRecs.map(function(r){return '<div class="srec"><span class="qz">'+esc(r.query)+'</span><span class="tag2">'+esc(r.note)+'</span></div>';}).join('')+
+        '<div class="cta"><span class="t">This is a preview. The full Opportunity Finder maps every uncontested question in your market.</span><a href="https://specularisinc.com/free-audit">Ask us to run it →</a></div>';
+      det.appendChild(sm);
     }
     document.getElementById('dl').disabled=false; S.textContent='';
   }
