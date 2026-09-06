@@ -263,13 +263,14 @@
     var qs=Object.keys(params).filter(function(kk){return params[kk];})
       .map(function(kk){return kk+'='+encodeURIComponent(params[kk]);}).join('&');
     var url='/api/scoreboard-scan?'+qs+(key?'&k='+encodeURIComponent(key):'');
-    fetch(url).then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
-      .then(function(res){
-        var j=res.j;
-        if(!res.ok || j.error){ document.getElementById('err').textContent = j.error || 'Something went wrong.'; document.getElementById('again').style.display=''; S.textContent=''; return; }
-        render(j);
-      })
-      .catch(function(){ document.getElementById('err').textContent='Network error.'; document.getElementById('again').style.display=''; S.textContent=''; });
+    var fail=function(msg){ document.getElementById('err').textContent=msg; document.getElementById('again').style.display=''; S.textContent=''; };
+    fetch(url).then(function(r){
+      return r.text().then(function(tx){ var j=null; try{ j=JSON.parse(tx); }catch(e){} return {ok:r.ok,status:r.status,j:j,tx:tx}; });
+    }).then(function(res){
+      if(res.j && !res.j.error && res.ok){ render(res.j); return; }
+      if(res.j && res.j.error){ fail(res.j.error); return; }
+      fail('HTTP '+res.status+' — '+String(res.tx||'no response body').slice(0,220));
+    }).catch(function(e){ fail('Network error: '+String(e && e.message ? e.message : e).slice(0,200)); });
   }
 
   var mode='site';
