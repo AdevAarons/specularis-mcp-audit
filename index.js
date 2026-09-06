@@ -1780,7 +1780,7 @@ const runOpportunityFinder = async (seed) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "2.7.0",
+  version: "2.8.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -2102,7 +2102,9 @@ app.post("/citation-finder", async (req, res) => {
     const { query, domain, email } = req.body || {};
     if (!query || !domain) return res.status(400).json({ error: "query and domain are required" });
     const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
-    const rl = rateLimitFinder(ip);
+    // The public limit exists so strangers cannot burn the Perplexity budget. An
+    // authenticated operator running a prospect workup is not that.
+    const rl = deepAuthorised(req) ? { ok: true } : rateLimitFinder(ip);
     if (!rl.ok) return res.status(429).json({ error: rl.reason === "daily"
       ? "This free tool has hit today's usage limit. Please try again tomorrow — or run the full audit."
       : "You've run a few checks in a short window. Give it a few minutes and try again." });
