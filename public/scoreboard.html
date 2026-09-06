@@ -84,7 +84,10 @@
   #start{ max-width:520px; margin:6vh auto 0; background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%); border:1px solid var(--line); border-radius:20px; padding:40px 40px 36px; }
   #start .eyebrow{ margin-bottom:14px; display:block; }
   #start h1{ font-size:28px; font-weight:900; letter-spacing:-.025em; margin:0 0 8px; }
-  #start .sub{ color:var(--sec); font-size:15px; margin-bottom:26px; }
+  #start .sub{ color:var(--sec); font-size:15px; margin-bottom:22px; }
+  #start .modes{ display:flex; gap:6px; background:#eef1f6; border-radius:12px; padding:5px; margin-bottom:22px; }
+  #start .mode{ flex:1; font-family:inherit; font-size:14px; font-weight:700; color:var(--sec); background:transparent; border:0; border-radius:9px; padding:11px; cursor:pointer; }
+  #start .mode.on{ background:#fff; color:var(--ink); box-shadow:0 1px 3px rgba(20,30,50,.12); }
   #start label{ display:block; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 8px; }
   #start .fld{ margin-bottom:20px; }
   #start input{ width:100%; font-family:inherit; font-size:16px; font-weight:500; color:var(--ink); background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:14px 16px; outline:none; }
@@ -104,10 +107,24 @@
   <div id="start" hidden>
     <span class="eyebrow">AI Citation Scoreboard</span>
     <h1>Run a scoreboard</h1>
-    <div class="sub">Enter a business's website. We'll ask ChatGPT, Perplexity, Claude and Gemini the 40 questions their customers ask, and score how often AI names them.</div>
-    <div class="fld">
+    <div class="sub">We'll ask ChatGPT, Perplexity, Claude and Gemini the 40 questions their customers ask, and score how often AI names them.</div>
+    <div class="modes">
+      <button type="button" class="mode on" id="m-site" data-mode="site">They have a website</button>
+      <button type="button" class="mode" id="m-name" data-mode="name">Just a name</button>
+    </div>
+    <div class="fld" id="grp-site">
       <label for="f-domain">Website</label>
       <input id="f-domain" type="text" placeholder="theirbusiness.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div id="grp-name" hidden>
+      <div class="fld">
+        <label for="f-name">Person or business name</label>
+        <input id="f-name" type="text" placeholder="e.g. Jane Rivera" autocomplete="off">
+      </div>
+      <div class="fld">
+        <label for="f-seed">What they do &amp; where</label>
+        <input id="f-seed" type="text" placeholder="e.g. real estate agent in Tampa, FL" autocomplete="off">
+      </div>
     </div>
     <div class="fld">
       <label for="f-key">Access key</label>
@@ -240,10 +257,12 @@
     document.getElementById('card').hidden=false;
   }
 
-  function runLive(domain, key, seedv){
+  function runScan(params, key){
     showResults();
     S.textContent='Running the scoreboard scan across ~40 questions… this takes a minute or two.';
-    var url='/api/scoreboard-scan?d='+encodeURIComponent(domain)+(key?'&k='+encodeURIComponent(key):'')+(seedv?'&seed='+encodeURIComponent(seedv):'');
+    var qs=Object.keys(params).filter(function(kk){return params[kk];})
+      .map(function(kk){return kk+'='+encodeURIComponent(params[kk]);}).join('&');
+    var url='/api/scoreboard-scan?'+qs+(key?'&k='+encodeURIComponent(key):'');
     fetch(url).then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
       .then(function(res){
         var j=res.j;
@@ -253,33 +272,61 @@
       .catch(function(){ document.getElementById('err').textContent='Network error.'; document.getElementById('again').style.display=''; S.textContent=''; });
   }
 
+  var mode='site';
+  function setMode(mNew){
+    mode=mNew;
+    document.getElementById('m-site').classList.toggle('on', mode==='site');
+    document.getElementById('m-name').classList.toggle('on', mode==='name');
+    document.getElementById('grp-site').hidden = mode!=='site';
+    document.getElementById('grp-name').hidden = mode!=='name';
+    document.getElementById('f-err').textContent='';
+  }
+
   function submitForm(){
-    var dom=document.getElementById('f-domain').value.trim().replace(/^https?:\/\//i,'').replace(/\/.*$/,'');
     var key=document.getElementById('f-key').value.trim();
     var fe=document.getElementById('f-err');
-    if(!dom){ fe.textContent='Enter a website.'; return; }
     if(!key){ fe.textContent='Enter your access key.'; return; }
+    var params;
+    if(mode==='name'){
+      var nm=document.getElementById('f-name').value.trim();
+      var sd=document.getElementById('f-seed').value.trim();
+      if(!nm){ fe.textContent='Enter a name.'; return; }
+      if(!sd){ fe.textContent='Tell me what they do and where.'; return; }
+      params={ name:nm, seed:sd };
+    } else {
+      var dom=document.getElementById('f-domain').value.trim().replace(/^https?:\/\//i,'').replace(/\/.*$/,'');
+      if(!dom){ fe.textContent='Enter a website.'; return; }
+      params={ d:dom };
+    }
     fe.textContent='';
     try{ if(document.getElementById('f-remember').checked) localStorage.setItem(LS_KEY,key); else localStorage.removeItem(LS_KEY); }catch(e){}
-    try{ history.replaceState(null,'',location.pathname+'?d='+encodeURIComponent(dom)); }catch(e){}
-    runLive(dom, key, '');
+    var share=Object.keys(params).map(function(kk){return kk+'='+encodeURIComponent(params[kk]);}).join('&');
+    try{ history.replaceState(null,'',location.pathname+'?'+share); }catch(e){}
+    runScan(params, key);
   }
 
   function showForm(){
     var s=document.getElementById('start'); s.hidden=false;
     try{ var saved=localStorage.getItem(LS_KEY); if(saved) document.getElementById('f-key').value=saved; }catch(e){}
+    document.getElementById('m-site').addEventListener('click', function(){ setMode('site'); });
+    document.getElementById('m-name').addEventListener('click', function(){ setMode('name'); });
     document.getElementById('f-go').addEventListener('click', submitForm);
-    ['f-domain','f-key'].forEach(function(id){
+    ['f-domain','f-name','f-seed','f-key'].forEach(function(id){
       document.getElementById(id).addEventListener('keydown', function(e){ if(e.key==='Enter') submitForm(); });
     });
-    (document.getElementById('f-domain').value ? document.getElementById('f-go') : document.getElementById('f-domain')).focus();
+    document.getElementById('f-domain').focus();
   }
 
-  // Route: ?demo=1 → demo card · ?d=domain → live run (key from URL or remembered) · nothing → the form
+  // Route: ?demo=1 → demo · ?d=domain → website run · ?name=…&seed=… → name run · nothing → the form
+  var nameQ=(P.get('name')||'').trim();
   if(demo){ showResults(); render(DEMO); }
   else if(d){
     var key=k; if(!key){ try{ key=localStorage.getItem(LS_KEY)||''; }catch(e){} }
-    runLive(d, key, seed);
+    runScan({ d:d, seed:seed }, key);
+  }
+  else if(nameQ){
+    var key2=k; if(!key2){ try{ key2=localStorage.getItem(LS_KEY)||''; }catch(e){} }
+    runScan({ name:nameQ, seed:seed }, key2);
   }
   else { showForm(); }
 </script>

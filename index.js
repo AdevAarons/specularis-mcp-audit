@@ -1612,18 +1612,16 @@ const hostOf = (u) => (String(u).match(/^https?:\/\/([^\/]+)/i)?.[1] || "").toLo
 // AI Citation Scoreboard scan (v1): a wide, affordable battery. Perplexity-first
 // so 40 questions stay cheap; "cited" = your domain is among the sources AI drew
 // from OR AI named you in the answer. Also tallies who gets cited instead.
-const runScoreboardScan = async (domain, seedIn, n = 40) => {
-  const site = normalizeUrl(domain);
-  const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
-  const variants = brandVariants(bare);
-  let seed = (seedIn || "").trim();
-  if (!seed) {
-    const p = await siteProfile(site).catch(() => null);
-    seed = p ? [p.category, [p.city, p.region].filter(Boolean).join(", ")].filter(Boolean).join(" in ") : bare;
-  }
-  const queries = await expandSeedToQueries(seed, n);
-  if (!queries.length) return { error: "Could not generate candidate queries (is ANTHROPIC_API_KEY set?)." };
+// A person/business name is matched only by name-in-answer — there is no domain to cite.
+const nameVariants = (name) => {
+  const n = String(name || "").replace(/\s+/g, " ").trim();
+  return n ? [n] : [];
+};
 
+// Shared engine of both scoreboard modes. citeHost is the domain to credit when it appears
+// in AI's cited sources (website mode); pass null for name mode, where a "win" is purely AI
+// naming the person/business in its answer. queries + seed are prepared by each entry point.
+const scoreboardCore = async ({ label, variants, citeHost, seed, queries }) => {
   // Run every question through all four engines the way the Citation Finder does, so the
   // scoreboard reflects "cited across the engines your customers actually use", not just one.
   const runs = await mapLimit(queries, 4, async (q) => {
@@ -1665,7 +1663,7 @@ const runScoreboardScan = async (domain, seedIn, n = 40) => {
 
     if (!okOf(px) && !okOf(cl) && !okOf(gm) && !okOf(gpt)) return { query: q, error: true };
     hosts = [...new Set(hosts.filter(Boolean))];
-    const youHost = hosts.some((h) => h === bare || h.endsWith("." + bare));
+    const youHost = citeHost ? hosts.some((h) => h === citeHost || h.endsWith("." + citeHost)) : false;
     const named = mentionsBrand(text, variants);
     return { query: q, owned: youHost || named, hosts };
   });
@@ -1677,7 +1675,7 @@ const runScoreboardScan = async (domain, seedIn, n = 40) => {
 
   const freq = new Map();
   valid.forEach((r) => (r.hosts || []).forEach((h) => {
-    if (!h || h === bare || h.endsWith("." + bare)) return;
+    if (!h || (citeHost && (h === citeHost || h.endsWith("." + citeHost)))) return;
     freq.set(h, (freq.get(h) || 0) + 1);
   }));
   const ranked = [...freq.entries()].sort((a, b) => b[1] - a[1])
@@ -1709,11 +1707,38 @@ const runScoreboardScan = async (domain, seedIn, n = 40) => {
     }));
 
   return {
-    host: bare, seed, total, cited, engines,
+    host: label, seed, total, cited, engines,
     runs: valid.map((r) => ({ query: r.query, owned: !!r.owned })),
     rival: topRival ? { host: topRival.host, citedIn: topRival.citedIn, ofQueries: total } : null,
     openings, smartRecs,
   };
+};
+
+// Website mode: credit the domain when it is cited, and derive the category seed from the site.
+const runScoreboardScan = async (domain, seedIn, n = 40) => {
+  const site = normalizeUrl(domain);
+  const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
+  let seed = (seedIn || "").trim();
+  if (!seed) {
+    const p = await siteProfile(site).catch(() => null);
+    seed = p ? [p.category, [p.city, p.region].filter(Boolean).join(", ")].filter(Boolean).join(" in ") : bare;
+  }
+  const queries = await expandSeedToQueries(seed, n);
+  if (!queries.length) return { error: "Could not generate candidate queries (is ANTHROPIC_API_KEY set?)." };
+  return scoreboardCore({ label: bare, variants: brandVariants(bare), citeHost: bare, seed, queries });
+};
+
+// Name mode: for a person/business with no website. A "win" is AI naming them in its answer.
+// The category seed is required here because there is no site to infer it from.
+const runScoreboardScanByName = async (name, seedIn, n = 40) => {
+  const clean = String(name || "").replace(/\s+/g, " ").trim();
+  if (!clean) return { error: "Give me a name." };
+  const seed = (seedIn || "").trim();
+  if (!seed) return { error: "For a name, tell me what they do and where — e.g. \"real estate agent in Tampa, FL\"." };
+  const variants = nameVariants(clean);
+  const queries = await expandSeedToQueries(seed, n);
+  if (!queries.length) return { error: "Could not generate candidate queries (is ANTHROPIC_API_KEY set?)." };
+  return scoreboardCore({ label: clean, variants, citeHost: null, seed, queries });
 };
 
 // Score how "open" a query is from a finder result (0-100, higher = more uncontested).
@@ -2034,7 +2059,19 @@ app.get("/scoreboard", (_req, res) => {
 // Gated like the deep audit. ?d=<domain>&k=<DEEP_KEY>&seed=<niche?>&n=<count?>
 app.get("/api/scoreboard-scan", async (req, res) => {
   if (!deepAuthorised(req)) return res.status(401).json({ error: "Unauthorized" });
-  if (!normalizeUrl(String(req.query.d || ""))) return res.status(400).json({ error: "Give me a domain" });
+  const name = String(req.query.name || "").trim();
+  const hasDomain = !!normalizeUrl(String(req.query.d || ""));
+  // Name mode: no website, just a person/business name + a category seed.
+  if (!hasDomain && name) {
+    try {
+      const n = Math.min(40, Math.max(8, Number(req.query.n) || 40));
+      const out = await runScoreboardScanByName(name, String(req.query.seed || ""), n);
+      if (out.error) return res.status(out.error.startsWith("For a name") ? 400 : 502).json(out);
+      res.json(out);
+    } catch (e) { res.status(500).json({ error: "scoreboard scan failed: " + String(e).slice(0, 160) }); }
+    return;
+  }
+  if (!hasDomain) return res.status(400).json({ error: "Give me a domain, or a name + what they do." });
   try {
     const n = Math.min(40, Math.max(8, Number(req.query.n) || 40));
     const out = await runScoreboardScan(String(req.query.d), String(req.query.seed || ""), n);
