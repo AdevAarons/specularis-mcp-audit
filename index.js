@@ -80,6 +80,7 @@ const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || ""; // set in Railw
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || ""; // set in Railway Variables — adds Claude as a 2nd engine in the citation finder
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ""; // set in Railway Variables — adds Gemini as a 3rd engine in the citation finder
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ""; // set in Railway Variables — adds ChatGPT as a 4th engine in the citation finder
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-mini"; // cheaper default; set OPENAI_MODEL=gpt-5.1 on Railway to revert instantly if a scan stops citing ChatGPT
 const NOTION_TOKEN = process.env.NOTION_TOKEN || "";       // Notion internal-integration token — logs finder leads
 const NOTION_LEADS_DB = process.env.NOTION_LEADS_DB || ""; // Notion database id that receives finder leads
 // Deep-audit baselines: one row per run so a signed score can be compared later.
@@ -1251,7 +1252,7 @@ const callChatGPT = async (query) => {
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST", signal: ctrl.signal,
       headers: { "Authorization": "Bearer " + OPENAI_API_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "gpt-5.1", input: query, tools: [{ type: "web_search" }] }),
+      body: JSON.stringify({ model: OPENAI_MODEL, input: query, tools: [{ type: "web_search" }] }),
     });
     if (!r.ok) return { error: "chatgpt " + r.status };
     return await r.json();
@@ -2088,7 +2089,7 @@ app.get("/api/scoreboard-scan", async (req, res) => {
   // Name mode: no website, just a person/business name + a category seed.
   if (!hasDomain && name) {
     try {
-      const n = Math.min(40, Math.max(8, Number(req.query.n) || 40));
+      const n = Math.min(40, Math.max(8, Number(req.query.n) || 20));
       const out = await runScoreboardScanByName(name, String(req.query.seed || ""), n);
       if (out.error) return res.status(out.error.startsWith("For a name") ? 400 : 502).json(out);
       res.json(out);
@@ -2097,7 +2098,7 @@ app.get("/api/scoreboard-scan", async (req, res) => {
   }
   if (!hasDomain) return res.status(400).json({ error: "Give me a domain, or a name + what they do." });
   try {
-    const n = Math.min(40, Math.max(8, Number(req.query.n) || 40));
+    const n = Math.min(40, Math.max(8, Number(req.query.n) || 20));
     const out = await runScoreboardScan(String(req.query.d), String(req.query.seed || ""), n);
     if (out.error) return res.status(502).json(out);
     res.json(out);
