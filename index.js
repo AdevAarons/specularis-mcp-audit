@@ -1175,7 +1175,10 @@ const callClaude = async (query) => {
         model: "claude-sonnet-5",
         max_tokens: 1024,
         messages: [{ role: "user", content: query }],
-        tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }],
+        // max_uses:1, not 3 — web searches are billed per search (~1c each) regardless
+        // of model, and 40 queries x 3 searches was the single biggest cost per scan.
+        // One search returns the same results page we read the cited sources from.
+        tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 1 }],
       }),
     });
     if (!r.ok) return { error: "claude " + r.status };
@@ -1582,7 +1585,7 @@ const expandSeedToQueries = async (seed, n = 8) => {
       method: "POST", signal: ctrl.signal,
       headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-opus-5", max_tokens: Math.min(2400, 200 + n * 30),
+        model: "claude-haiku-4-5-20251001", max_tokens: Math.min(2400, 200 + n * 30),
         messages: [{ role: "user", content:
           `A local business is in this niche: "${seed}". List ${n} specific, realistic questions a customer might ask an AI assistant to find a business like this. Span the full buyer journey: a few broad "best/top" questions, and many narrow ones by segment, need, situation, budget, and location (for example "for first-time buyers", "open late", "for a specific problem or budget"). Keep them distinct. Return ONLY a JSON array of ${n} short question strings and nothing else.` }],
       }),
