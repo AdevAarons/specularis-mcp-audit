@@ -55,6 +55,7 @@ h2{ font-weight:900; font-size:clamp(21px,3.2vw,27px); letter-spacing:-.015em; m
 .chip{ display:inline-flex; width:26px; height:26px; border-radius:7px; align-items:center; justify-content:center; font-size:13px; font-weight:900; }
 .c-no{ background:var(--gap-bg); color:var(--gap); }
 .c-yes{ background:var(--good-bg); color:var(--good); }
+.c-na{ background:rgba(255,255,255,.04); color:var(--muted); }
 .c-emg{ background:var(--emg-bg); color:var(--emg); }
 .tally{ display:flex; align-items:center; gap:13px; margin-top:14px; flex-wrap:wrap; }
 .tally .big{ font-weight:900; font-size:25px; }
@@ -146,13 +147,13 @@ a{ color:var(--accent-lt); }
   </div>
 
   <h1>Where AI puts you today, and where we'll have you in <em>90 days.</em></h1>
-  <p class="deck">We ask ChatGPT, Claude, Perplexity, and Google the questions your future clients ask — and track exactly when AI starts naming Omega Property Investments instead of the big-box competitors. This is your live scoreboard.</p>
+  <p class="deck">We ask Perplexity, Google&rsquo;s Gemini and ChatGPT the questions your future clients ask — and track exactly when AI starts naming Omega Property Investments instead of the big-box competitors. This is your live scoreboard.</p>
 
   <div class="kpis num">
     <div class="kpi"><div class="l">AI Readiness Score</div><div class="v"><span class="now">34</span><span class="to">→</span><span class="goal">78</span></div><div class="c">Grade F today · 90-day goal</div></div>
     <div class="kpi"><div class="l">AI Answer Share</div><div class="v"><span class="now">0<span style="font-size:15px;color:var(--dim)">/30</span></span><span class="to">→</span><span class="goal">24/30</span></div><div class="c">times AI names you</div></div>
-    <div class="kpi"><div class="l">Search + AI traffic</div><div class="v"><span class="now sm">Baseline</span><span class="to">→</span><span class="goal">not modelled</span></div><div class="c">no published baseline to project from</div></div>
-    <div class="kpi"><div class="l">New leads / mo</div><div class="v"><span class="now sm">Baseline</span><span class="to">→</span><span class="goal">not modelled</span></div><div class="c">we measure this once, then again</div></div>
+    <div class="kpi"><div class="l">Search + AI traffic</div><div class="v"><span class="now sm">Baseline</span><span class="to">→</span><span class="goal">measured at 30/60/90</span></div><div class="c">your analytics, once shared</div></div>
+    <div class="kpi"><div class="l">New leads / mo</div><div class="v"><span class="now sm">Baseline</span><span class="to">→</span><span class="goal">measured at 30/60/90</span></div><div class="c">your CRM, once shared</div></div>
   </div>
 
   <!-- SCORE BREAKDOWN -->
@@ -178,7 +179,7 @@ a{ color:var(--accent-lt); }
     <h2>We asked AI. Right now, it doesn't name you.</h2>
     <div class="mtx num">
       <table>
-        <thead><tr><th class="q">The question your future client asks AI</th><th>ChatGPT</th><th>Claude</th><th>Perplexity</th><th>Google&nbsp;AI</th></tr></thead>
+        <thead><tr><th class="q">The question your future client asks AI</th><th>ChatGPT</th><th>Claude<span style="opacity:.55;font-weight:400">&nbsp;*</span></th><th>Perplexity</th><th>Google&nbsp;AI</th></tr></thead>
         <tbody>
             <tr><td class="q">Who are the best multifamily real estate syndication firms for passive investors?</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-na">·</span></td></tr>
             <tr><td class="q">Who are the best real estate fund managers for passive investors in North Carolina?</td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-no">✕</span></td><td><span class="chip c-na">·</span></td></tr>
@@ -204,7 +205,7 @@ a{ color:var(--accent-lt); }
     <h2>The same questions — with your name in the answer.</h2>
     <div class="mtx num">
       <table>
-        <thead><tr><th class="q">The question your future client asks AI</th><th>ChatGPT</th><th>Claude</th><th>Perplexity</th><th>Google&nbsp;AI</th></tr></thead>
+        <thead><tr><th class="q">The question your future client asks AI</th><th>ChatGPT</th><th>Claude<span style="opacity:.55;font-weight:400">&nbsp;*</span></th><th>Perplexity</th><th>Google&nbsp;AI</th></tr></thead>
         <tbody>
             <tr><td class="q">Who are the best multifamily real estate syndication firms for passive investors?</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-na">·</span></td></tr>
             <tr><td class="q">Who are the best real estate fund managers for passive investors in North Carolina?</td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-yes">✓</span></td><td><span class="chip c-na">·</span></td></tr>
@@ -370,7 +371,7 @@ a{ color:var(--accent-lt); }
   </div>
 
   <div class="foot">
-    <b>How this works:</b> we refresh this scoreboard every two weeks and walk you through it. AI answer checks are run live against each engine through our citation finder, not estimated. Traffic and lead numbers would come from your own analytics once you share access &mdash; we have not projected them here.<br>
+    <b>How this works:</b> we refresh this scoreboard every two weeks and walk you through it. AI answer checks are run live against each engine through our citation finder, not estimated. <b>* Claude</b> is queried only as a fallback in this tool, so it did not return a verdict on these questions &mdash; those cells are marked &middot; rather than guessed. The thirty checks that did run are Perplexity, Gemini and ChatGPT. Traffic and lead numbers would come from your own analytics once you share access &mdash; we have not projected them here.<br>
     Baseline captured this week from a live Specularis AI-visibility audit of omegapropertyinvestments.com. Competitor names are the actual results AI returned for these queries at time of scan. Reference stat: in our 14-site study, businesses AI recommends scored ~20 points higher than the ones it ignores (64.5 vs 44.7) — the exact gap this plan closes.
   </div>
 
