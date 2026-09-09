@@ -1807,7 +1807,7 @@ const runOpportunityFinder = async (seed) => {
 const SERVER_INFO = {
   name: "specularis-ai-visibility-audit",
   title: "Specularis AI Visibility Audit",
-  version: "2.8.0",
+  version: "2.9.0",
   websiteUrl: "https://specularisinc.com/free-audit",
   icons: [
     { src: "https://framerusercontent.com/images/LXIyg0KiJbKOgwh3fUcQRcHXg.png", mimeType: "image/png", theme: "light" },
@@ -2812,6 +2812,28 @@ app.get("/r/:id", async (req, res) => {
     res.set("X-Robots-Tag", "noindex, nofollow").type("html")
        .send(DEEP_HTML.replace("</head>", inject + "</head>"));
   } catch (e) { res.status(500).send("Could not load that report."); }
+});
+
+// Temporary diagnostic: every Anthropic call fails fast and each caller swallows
+// the error and falls back, so the surface message ("is ANTHROPIC_API_KEY set?")
+// is a guess. This returns the upstream status and body verbatim. Key-gated.
+app.get("/api/diag/anthropic", async (req, res) => {
+  if (!deepAuthorised(req)) return res.status(401).json({ error: "Unauthorized" });
+  const out = { keyPresent: !!ANTHROPIC_API_KEY, keyLength: (ANTHROPIC_API_KEY || "").length,
+                keyPrefix: (ANTHROPIC_API_KEY || "").slice(0, 7) };
+  for (const model of ["claude-haiku-4-5-20251001", "claude-haiku-4-5", "claude-sonnet-5"]) {
+    const t0 = Date.now();
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+        body: JSON.stringify({ model, max_tokens: 16, messages: [{ role: "user", content: "Reply with the single word: ok" }] }),
+      });
+      const body = await r.text();
+      out[model] = { status: r.status, ms: Date.now() - t0, body: body.slice(0, 300) };
+    } catch (e) { out[model] = { threw: String(e).slice(0, 200), ms: Date.now() - t0 }; }
+  }
+  res.json(out);
 });
 
 app.get("/deep", (req, res) => {
