@@ -2119,6 +2119,63 @@ app.get("/api/scoreboard-scan", async (req, res) => {
   } catch (e) { res.status(500).json({ error: "scoreboard scan failed: " + String(e).slice(0, 160) }); }
 });
 
+// ---- Async scoreboard jobs ----
+// A full scan runs ~80 live AI calls over 1-3 minutes. Holding one HTTP request open
+// that long dies behind Railway's gateway ("Application failed to respond", 502). So the
+// page STARTS a job (returns instantly), the scan runs in the background here, and the
+// page POLLS for the result. Each request is sub-second, so it can never time out.
+// In-memory store is fine: this runs as a single Railway instance (same as the rate limiter).
+const SCAN_JOBS = new Map();
+const SCAN_JOB_TTL = 15 * 60 * 1000;
+const newJobId = () => Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+const pruneScanJobs = () => {
+  const now = Date.now();
+  for (const [id, j] of SCAN_JOBS) if (j.status !== "running" && now - j.at > SCAN_JOB_TTL) SCAN_JOBS.delete(id);
+};
+
+// Resolve query params to a runnable scan (website or name mode), or an error to return.
+const resolveScanRun = (req) => {
+  const name = String(req.query.name || "").trim();
+  const hasDomain = !!normalizeUrl(String(req.query.d || ""));
+  const n = Math.min(40, Math.max(8, Number(req.query.n) || 20));
+  const seed = String(req.query.seed || "");
+  if (!hasDomain && name) return { run: () => runScoreboardScanByName(name, seed, n) };
+  if (!hasDomain) return { error: "Give me a domain, or a name + what they do." };
+  return { run: () => runScoreboardScan(String(req.query.d), seed, n) };
+};
+
+app.get("/api/scoreboard-scan/start", (req, res) => {
+  if (!deepAuthorised(req)) return res.status(401).json({ error: "Unauthorized" });
+  const r = resolveScanRun(req);
+  if (r.error) return res.status(400).json({ error: r.error });
+  pruneScanJobs();
+  if (SCAN_JOBS.size > 200) { // safety cap: drop the oldest finished/oldest job
+    const oldest = [...SCAN_JOBS.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+    if (oldest) SCAN_JOBS.delete(oldest[0]);
+  }
+  const jobId = newJobId();
+  SCAN_JOBS.set(jobId, { status: "running", at: Date.now(), result: null, error: null });
+  // Fire and forget — the scan keeps running after this response is sent.
+  r.run().then((out) => {
+    const j = SCAN_JOBS.get(jobId); if (!j) return;
+    if (out && out.error) { j.status = "error"; j.error = out.error; } else { j.status = "done"; j.result = out; }
+    j.at = Date.now();
+  }).catch((e) => {
+    const j = SCAN_JOBS.get(jobId); if (!j) return;
+    j.status = "error"; j.error = "scoreboard scan failed: " + String(e).slice(0, 160); j.at = Date.now();
+  });
+  res.json({ jobId });
+});
+
+app.get("/api/scoreboard-scan/status", (req, res) => {
+  if (!deepAuthorised(req)) return res.status(401).json({ error: "Unauthorized" });
+  const job = SCAN_JOBS.get(String(req.query.job || ""));
+  if (!job) return res.status(404).json({ error: "That scan expired or was lost. Run it again." });
+  if (job.status === "running") return res.json({ status: "running" });
+  if (job.status === "error") return res.json({ status: "error", error: job.error });
+  return res.json({ status: "done", result: job.result });
+});
+
 // Opportunity Finder (v1) — gated (secret) + costly: expands a niche seed into
 // candidate queries, runs each through the finder, ranks by "openness".
 // POST { seed }  header/query: key=OPPORTUNITY_KEY

@@ -257,19 +257,35 @@
     document.getElementById('card').hidden=false;
   }
 
+  // The scan runs as a background job on the server: start it (returns instantly), then poll
+  // for the result. Each request is sub-second, so it can't hit the gateway timeout that a
+  // single 1-3 minute request does.
   function runScan(params, key){
     showResults();
     S.textContent='Running the scoreboard scan across ~40 questions… this takes a minute or two.';
     var qs=Object.keys(params).filter(function(kk){return params[kk];})
       .map(function(kk){return kk+'='+encodeURIComponent(params[kk]);}).join('&');
-    var url='/api/scoreboard-scan?'+qs+(key?'&k='+encodeURIComponent(key):'');
+    var keyq=key?'&k='+encodeURIComponent(key):'';
+    var base='/api/scoreboard-scan/';
     var fail=function(msg){ document.getElementById('err').textContent=msg; document.getElementById('again').style.display=''; S.textContent=''; };
-    fetch(url).then(function(r){
-      return r.text().then(function(tx){ var j=null; try{ j=JSON.parse(tx); }catch(e){} return {ok:r.ok,status:r.status,j:j,tx:tx}; });
-    }).then(function(res){
-      if(res.j && !res.j.error && res.ok){ render(res.j); return; }
-      if(res.j && res.j.error){ fail(res.j.error); return; }
-      fail('HTTP '+res.status+' — '+String(res.tx||'no response body').slice(0,220));
+    var readJson=function(r){ return r.text().then(function(tx){ var j=null; try{ j=JSON.parse(tx); }catch(e){} return {ok:r.ok,status:r.status,j:j,tx:tx}; }); };
+
+    function poll(jobId, tries){
+      if(tries>95){ fail('The scan is taking unusually long (over 6 minutes). Please run it again.'); return; }
+      setTimeout(function(){
+        fetch(base+'status?job='+encodeURIComponent(jobId)+keyq).then(readJson).then(function(res){
+          if(!res.j){ fail('HTTP '+res.status+' — '+String(res.tx||'no response').slice(0,200)); return; }
+          if(res.j.status==='running'){ poll(jobId, tries+1); return; }
+          if(res.j.status==='done'){ render(res.j.result); return; }
+          if(res.j.status==='error'){ fail(res.j.error||'The scan failed.'); return; }
+          fail(res.j.error || ('HTTP '+res.status)); // 404 (expired) / 401 / unexpected
+        }).catch(function(){ poll(jobId, tries+1); }); // transient network blip: keep polling
+      }, tries===0 ? 3000 : 4000);
+    }
+
+    fetch(base+'start?'+qs+keyq).then(readJson).then(function(res){
+      if(res.ok && res.j && res.j.jobId){ poll(res.j.jobId, 0); return; }
+      fail((res.j && res.j.error) || ('HTTP '+res.status+' — '+String(res.tx||'no response').slice(0,200)));
     }).catch(function(e){ fail('Network error: '+String(e && e.message ? e.message : e).slice(0,200)); });
   }
 
