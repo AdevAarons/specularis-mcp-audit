@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{ --ink:#161616; --sec:#4a5261; --muted:#8a93a3; --faint:#b7bfce; --line:#e8ebf0; --surface:#fbfcfe; --blue:#2467E3; --blue-dk:#1c4fa6; --wash:#f2f6ff; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -139,7 +140,8 @@
   <div class="bar" id="bar" hidden>
     <span class="status" id="status"></span>
     <button class="btn ghost" id="again" style="display:none" onclick="location.href=location.pathname">Run another</button>
-    <button class="btn" id="dl" disabled onclick="downloadCard()">Download scoreboard</button>
+    <button class="btn ghost" id="dl" disabled onclick="downloadCard()">Card image</button>
+    <button class="btn" id="pdf" disabled onclick="downloadPDF()">Download PDF</button>
   </div>
 
   <div id="card" hidden>
@@ -171,6 +173,7 @@
   var demo=P.get('demo')==='1';
   var S=document.getElementById('status');
   var LS_KEY='spec_scoreboard_key';
+  var lastHost='';
 
   var STEMS=["who are the best real estate agents","top real estate agent near me","best agent for first-time buyers","how do I choose a real estate agent","what to look for in a realtor","best agent for luxury homes","agent for relocating families","is it worth hiring a realtor","compare real estate agents in the area","best agent for selling quickly","top realtors 2026","best agent for condos","best agent for investment properties","realtor for downsizing","agent for military families","best agent for new construction","realtor who speaks Spanish","best agent for waterfront homes","agent for first-time sellers","best low-commission agent","realtor for probate sales","best agent for fixer-uppers","agent for out-of-state buyers","best luxury real estate agent","realtor for 55+ communities","best agent for short sales","agent for vacation-rental investors","top-rated realtor reviews","best agent for negotiating price","realtor for townhomes","best agent for a fast closing","agent for divorce home sales","best realtor for buyers","best realtor for sellers","agent for historic homes","realtor for a specific school district","best agent for cash buyers","best agent for a starter home","realtor for eco-friendly homes","who is the best realtor for me"];
   var DEMO={ host:"your-business.com", host2:"a competing brokerage", engines:["Perplexity","Claude","Gemini","ChatGPT"],
@@ -186,6 +189,7 @@
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
   function render(m){
+    lastHost=m.host||'';
     var total=m.total!=null?m.total:(m.runs||[]).length;
     var cited=m.cited!=null?m.cited:(m.runs||[]).filter(function(r){return r.owned;}).length;
     document.getElementById('tag').textContent = demo?'Illustrative':'Live result';
@@ -241,7 +245,35 @@
       det.appendChild(sm);
     }
     document.getElementById('dl').disabled=false;
+    document.getElementById('pdf').disabled=false;
     document.getElementById('again').style.display=''; S.textContent='';
+  }
+
+  function downloadPDF(){
+    var b=document.getElementById('pdf'), bar=document.getElementById('bar'), errEl=document.getElementById('err');
+    b.disabled=true; S.textContent='Building PDF…';
+    // Hide the toolbar + any error line so they don't get captured; restore after.
+    var barDisp=bar.style.display, errDisp=errEl.style.display;
+    bar.style.display='none'; errEl.style.display='none';
+    var page=document.querySelector('.page');
+    html2canvas(page,{scale:2, backgroundColor:'#ffffff', logging:false, windowWidth:page.scrollWidth}).then(function(cv){
+      bar.style.display=barDisp; errEl.style.display=errDisp;
+      var jsPDF=window.jspdf.jsPDF;
+      var pdf=new jsPDF('p','pt','a4');
+      var pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
+      var imgW=pw, imgH=cv.height*pw/cv.width;
+      var img=cv.toDataURL('image/png');
+      var pos=0, left=imgH;
+      pdf.addImage(img,'PNG',0,pos,imgW,imgH);
+      left-=ph;
+      while(left>0){ pos-=ph; pdf.addPage(); pdf.addImage(img,'PNG',0,pos,imgW,imgH); left-=ph; }
+      var safe=(lastHost||'report').replace(/[^a-z0-9.-]+/gi,'-');
+      pdf.save('ai-citation-scoreboard-'+safe+'.pdf');
+      S.textContent='Downloaded.'; b.disabled=false;
+    }).catch(function(){
+      bar.style.display=barDisp; errEl.style.display=errDisp;
+      S.textContent='Could not build the PDF — try the Card image button, or print the page to PDF.'; b.disabled=false;
+    });
   }
 
   function downloadCard(){
