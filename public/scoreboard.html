@@ -262,11 +262,13 @@
       var pdf=new jsPDF('p','pt','a4');
       var pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
       var imgW=pw, imgH=cv.height*pw/cv.width;
-      var img=cv.toDataURL('image/png');
+      // JPEG, not PNG: a full-report PNG is ~24MB, JPEG at 0.92 is ~0.7MB and just as
+      // legible — small enough to email.
+      var img=cv.toDataURL('image/jpeg',0.92);
       var pos=0, left=imgH;
-      pdf.addImage(img,'PNG',0,pos,imgW,imgH);
+      pdf.addImage(img,'JPEG',0,pos,imgW,imgH);
       left-=ph;
-      while(left>0){ pos-=ph; pdf.addPage(); pdf.addImage(img,'PNG',0,pos,imgW,imgH); left-=ph; }
+      while(left>0){ pos-=ph; pdf.addPage(); pdf.addImage(img,'JPEG',0,pos,imgW,imgH); left-=ph; }
       var safe=(lastHost||'report').replace(/[^a-z0-9.-]+/gi,'-');
       pdf.save('ai-citation-scoreboard-'+safe+'.pdf');
       S.textContent='Downloaded.'; b.disabled=false;
