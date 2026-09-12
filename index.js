@@ -46,6 +46,8 @@ let SCOREBOARD_HTML = "";
 try { SCOREBOARD_HTML = readFileSync(join(__dirname, "public", "scoreboard.html"), "utf8"); } catch (e) {}
 let WHAT_WE_DO_HTML = "";
 try { WHAT_WE_DO_HTML = readFileSync(join(__dirname, "public", "what-we-do.html"), "utf8"); } catch (e) {}
+let GAP_SECTION_HTML = "";
+try { GAP_SECTION_HTML = readFileSync(join(__dirname, "public", "gap-section.html"), "utf8"); } catch (e) {}
 let SCHEMA_V3_TXT = "";
 try { SCHEMA_V3_TXT = readFileSync(join(__dirname, "public", "schema-v3.txt"), "utf8"); } catch (e) {}
 let SCAN_HTML = "";
@@ -2943,6 +2945,12 @@ app.get("/dashboard", (req, res) => {
 app.get("/what-we-do", (_req, res) => {
   if (!WHAT_WE_DO_HTML) return res.status(404).send("Not found");
   res.type("html").send(WHAT_WE_DO_HTML);
+});
+
+// "The Gap" section — branded-vs-discovery. Embedded by URL on the Framer homepage.
+app.get("/gap-section", (_req, res) => {
+  if (!GAP_SECTION_HTML) return res.status(404).send("Not found");
+  res.type("html").send(GAP_SECTION_HTML);
 });
 
 // Schema v3 served as PLAIN TEXT so it can be selected and copied verbatim
