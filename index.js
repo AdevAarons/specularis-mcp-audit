@@ -1629,10 +1629,10 @@ const nameVariants = (name) => {
 // Shared engine of both scoreboard modes. citeHost is the domain to credit when it appears
 // in AI's cited sources (website mode); pass null for name mode, where a "win" is purely AI
 // naming the person/business in its answer. queries + seed are prepared by each entry point.
-const scoreboardCore = async ({ label, variants, citeHost, seed, queries }) => {
-  // Run every question through all four engines the way the Citation Finder does, so the
-  // scoreboard reflects "cited across the engines your customers actually use", not just one.
-  const runs = await mapLimit(queries, 4, async (q) => {
+const scoreboardCore = async ({ label, variants, citeHost, seed, queries, branded }) => {
+  // One question across all four engines the way the Citation Finder does. Reused for both
+  // the unbranded category battery and the short branded battery below.
+  const scanOne = async (q) => {
     // Perplexity gets a one-shot 429 retry; the other three run alongside it.
     const pxP = (async () => {
       let r = await callPerplexity(q).catch(() => null);
@@ -1674,7 +1674,9 @@ const scoreboardCore = async ({ label, variants, citeHost, seed, queries }) => {
     const youHost = citeHost ? hosts.some((h) => h === citeHost || h.endsWith("." + citeHost)) : false;
     const named = mentionsBrand(text, variants);
     return { query: q, owned: youHost || named, hosts };
-  });
+  };
+
+  const runs = await mapLimit(queries, 4, scanOne);
 
   const valid = runs.filter((r) => !r.error);
   const total = valid.length;
@@ -1714,11 +1716,20 @@ const scoreboardCore = async ({ label, variants, citeHost, seed, queries }) => {
         : "no clear business owns this yet",
     }));
 
+  // Branded battery: a few questions that name the business directly. When a buyer already
+  // knows you, AI almost always finds you — so this is usually high. The contrast with the
+  // unbranded number above is the story: you are visible in memory, invisible in discovery.
+  let brandedOut = null;
+  if (Array.isArray(branded) && branded.length) {
+    const bruns = (await mapLimit(branded, 4, scanOne)).filter((r) => !r.error);
+    if (bruns.length) brandedOut = { total: bruns.length, cited: bruns.filter((r) => r.owned).length };
+  }
+
   return {
     host: label, seed, total, cited, engines,
     runs: valid.map((r) => ({ query: r.query, owned: !!r.owned })),
     rival: topRival ? { host: topRival.host, citedIn: topRival.citedIn, ofQueries: total } : null,
-    openings, smartRecs,
+    openings, smartRecs, branded: brandedOut,
   };
 };
 
@@ -1738,6 +1749,15 @@ const brandFromTitle = (title, bare) => {
   return [...new Set(out)];
 };
 
+// A handful of questions that name the business directly — the "branded" battery. The
+// contrast with the unbranded category questions is the whole story (visible by name,
+// invisible in discovery). Kept small: it adds cost, and branded answers are consistent.
+const brandedQueries = (brand) => {
+  const b = String(brand || "").trim();
+  if (!b) return [];
+  return [`Tell me about ${b}`, `Is ${b} any good`, `${b} reviews`, `What do people say about ${b}`, `Should I choose ${b}`];
+};
+
 // Website mode: credit the domain when it is cited, name-match the real business name too,
 // and build the category seed from what the site actually says it does (service, not the
 // nonexistent `category` field that silently left the seed location-only).
@@ -1753,8 +1773,11 @@ const runScoreboardScan = async (domain, seedIn, n = 40) => {
   }
   const queries = await expandSeedToQueries(seed, n);
   if (!queries.length) return { error: "Could not generate candidate queries (is ANTHROPIC_API_KEY set?)." };
-  const variants = [...new Set([...brandVariants(bare), ...brandFromTitle(profile && profile.title, bare)])];
-  return scoreboardCore({ label: bare, variants, citeHost: bare, seed, queries });
+  const titleNames = brandFromTitle(profile && profile.title, bare);
+  const variants = [...new Set([...brandVariants(bare), ...titleNames])];
+  const root = bare.split(".")[0];
+  const brandName = titleNames[0] || (root.charAt(0).toUpperCase() + root.slice(1));
+  return scoreboardCore({ label: bare, variants, citeHost: bare, seed, queries, branded: brandedQueries(brandName) });
 };
 
 // Name mode: for a person/business with no website. A "win" is AI naming them in its answer.
@@ -1767,7 +1790,7 @@ const runScoreboardScanByName = async (name, seedIn, n = 40) => {
   const variants = nameVariants(clean);
   const queries = await expandSeedToQueries(seed, n);
   if (!queries.length) return { error: "Could not generate candidate queries (is ANTHROPIC_API_KEY set?)." };
-  return scoreboardCore({ label: clean, variants, citeHost: null, seed, queries });
+  return scoreboardCore({ label: clean, variants, citeHost: null, seed, queries, branded: brandedQueries(clean) });
 };
 
 // Score how "open" a query is from a finder result (0-100, higher = more uncontested).
