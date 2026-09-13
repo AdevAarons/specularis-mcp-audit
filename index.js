@@ -70,6 +70,8 @@ let TOMII_HTML = "";
 try { TOMII_HTML = readFileSync(join(__dirname, "public", "tomii.html"), "utf8"); } catch (e) {}
 let DOCURIOUS_HTML = "";
 try { DOCURIOUS_HTML = readFileSync(join(__dirname, "public", "docurious.html"), "utf8"); } catch (e) {}
+let PROSPECTS_HTML = "";
+try { PROSPECTS_HTML = readFileSync(join(__dirname, "public", "prospects.html"), "utf8"); } catch (e) {}
 // Brand assets (served for schema logo/image + og); binary buffers loaded once
 let LOGO_PNG = null, HEADSHOT_PNG = null;
 try { LOGO_PNG = readFileSync(join(__dirname, "public", "assets", "specularis-logo.png")); } catch (e) {}
@@ -2074,6 +2076,14 @@ app.get("/tomii", (_req, res) => {
 app.get("/docurious", (_req, res) => {
   if (!DOCURIOUS_HTML) return res.status(404).send("Not found");
   res.type("html").send(DOCURIOUS_HTML);
+});
+
+// Internal index of every prospect scoreboard — the "one spot" home base.
+// Not linked from the public site; add a new card here every time a
+// scoreboard ships. Distinct from /dashboard (the client-results tracker).
+app.get("/prospects", (_req, res) => {
+  if (!PROSPECTS_HTML) return res.status(404).send("Not found");
+  res.type("html").send(PROSPECTS_HTML);
 });
 
 // Copy-source for restoring the Tampa study article body into the Framer CMS
