@@ -3026,3 +3026,4 @@ app.delete("/mcp", methodNotAllowed);
 
 setTimeout(() => { refreshBenchmarks().catch(() => {}); }, 8000);
 app.listen(PORT, () => console.log(`Specularis MCP server listening on :${PORT} (POST /mcp)`));
+// deploy nudge 20260914T171208Z
