@@ -27,9 +27,10 @@ h1{ font-weight:900; font-size:clamp(26px,4.2vw,38px); line-height:1.06; letter-
 h1 em{ font-style:normal; color:var(--accent-lt); }
 .deck{ color:var(--muted); font-size:15.5px; margin-top:13px; max-width:60ch; }
 .grid{ display:grid; grid-template-columns:1fr; gap:16px; margin-top:34px; }
-.card{ display:block; text-decoration:none; color:inherit; background:var(--panel); border:1px solid var(--line);
+.card{ background:var(--panel); border:1px solid var(--line);
   border-radius:16px; padding:22px 24px; transition:border-color .15s ease, transform .15s ease; }
 .card:hover{ border-color:#2c3f66; transform:translateY(-1px); }
+.card-hit{ display:block; text-decoration:none; color:inherit; }
 .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; }
 .card-name{ font-weight:900; font-size:19px; letter-spacing:-.01em; }
 .card-domain{ color:var(--dim); font-size:12.5px; margin-top:2px; }
@@ -44,7 +45,12 @@ h1 em{ font-style:normal; color:var(--accent-lt); }
 .stat-v{ font-weight:900; font-size:22px; margin-top:4px; font-variant-numeric:tabular-nums; }
 .stat-sm{ font-weight:600; font-size:12px; color:var(--muted); margin-left:2px; }
 .card-flag{ color:var(--emg); font-size:12px; margin-top:10px; }
-.card-foot{ color:var(--accent-lt); font-size:12.5px; font-weight:700; margin-top:16px; padding-top:14px; border-top:1px solid var(--line); }
+.card-date{ color:var(--dim); font-size:12.5px; margin-top:16px; }
+.card-foot{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; padding-top:14px; border-top:1px solid var(--line); }
+.card-action{ color:var(--accent-lt); font-size:12.5px; font-weight:700; text-decoration:none; }
+.card-action:hover{ text-decoration:underline; }
+.card-action.pdf{ color:var(--good); }
+.card-action.muted-action{ color:var(--dim); font-weight:600; }
 .note{ color:var(--dim); font-size:12.5px; margin-top:32px; text-align:center; }
 </style>
 </head>
@@ -68,7 +74,8 @@ h1 em{ font-style:normal; color:var(--accent-lt); }
   <p class="deck">Real audits, live citation-finder data, and tiered Opportunity Finder results for every active prospect. Click through to any scoreboard below.</p>
 
   <div class="grid">
-      <a class="card" href="/pavilion-construction">
+      <div class="card">
+      <a class="card-hit" href="/pavilion-construction">
         <div class="card-top">
           <div>
             <div class="card-name">Pavilion Construction</div>
@@ -92,9 +99,15 @@ h1 em{ font-style:normal; color:var(--accent-lt); }
           </div>
         </div>
         
-        <div class="card-foot">Built Sept 4, 2026 &middot; view full scoreboard &rarr;</div>
+        <div class="card-date">Built Sept 4, 2026</div>
       </a>
-      <a class="card" href="/catman">
+      <div class="card-foot">
+        <a class="card-action" href="/pavilion-construction">View scoreboard &rarr;</a>
+        <a class="card-action pdf" href="/assets/pdfs/pavilion-construction.pdf" target="_blank" rel="noopener">Findings PDF &darr;</a>
+      </div>
+      </div>
+      <div class="card">
+      <a class="card-hit" href="/catman">
         <div class="card-top">
           <div>
             <div class="card-name">Category Management Association</div>
@@ -118,9 +131,15 @@ h1 em{ font-style:normal; color:var(--accent-lt); }
           </div>
         </div>
         
-        <div class="card-foot">Built Sept 4, 2026 &middot; view full scoreboard &rarr;</div>
+        <div class="card-date">Built Sept 4, 2026</div>
       </a>
-      <a class="card" href="/docurious">
+      <div class="card-foot">
+        <a class="card-action" href="/catman">View scoreboard &rarr;</a>
+        <a class="card-action pdf" href="/assets/pdfs/catman.pdf" target="_blank" rel="noopener">Findings PDF &darr;</a>
+      </div>
+      </div>
+      <div class="card">
+      <a class="card-hit" href="/docurious">
         <div class="card-top">
           <div>
             <div class="card-name">DoCurious</div>
@@ -144,9 +163,15 @@ h1 em{ font-style:normal; color:var(--accent-lt); }
           </div>
         </div>
         
-        <div class="card-foot">Built Sept 4, 2026 &middot; view full scoreboard &rarr;</div>
+        <div class="card-date">Built Sept 4, 2026</div>
       </a>
-      <a class="card" href="/omega-property">
+      <div class="card-foot">
+        <a class="card-action" href="/docurious">View scoreboard &rarr;</a>
+        <span class="card-action muted-action">PDF not built yet</span>
+      </div>
+      </div>
+      <div class="card">
+      <a class="card-hit" href="/omega-property">
         <div class="card-top">
           <div>
             <div class="card-name">Omega Property Investments</div>
@@ -170,9 +195,15 @@ h1 em{ font-style:normal; color:var(--accent-lt); }
           </div>
         </div>
         <div class="card-flag">3-engine scheme (Perplexity, Gemini, ChatGPT &mdash; no Claude), not the standard 4</div>
-        <div class="card-foot">Built date on file &middot; view full scoreboard &rarr;</div>
+        <div class="card-date">Built date on file</div>
       </a>
-      <a class="card" href="/skylinepropertyexperts">
+      <div class="card-foot">
+        <a class="card-action" href="/omega-property">View scoreboard &rarr;</a>
+        <span class="card-action muted-action">PDF not built yet</span>
+      </div>
+      </div>
+      <div class="card">
+      <a class="card-hit" href="/skylinepropertyexperts">
         <div class="card-top">
           <div>
             <div class="card-name">Skyline Property Experts</div>
@@ -196,9 +227,15 @@ h1 em{ font-style:normal; color:var(--accent-lt); }
           </div>
         </div>
         <div class="card-flag">Clean 0/12 across all 10 real questions, on every engine that responded</div>
-        <div class="card-foot">Sent Sept 14, 2026 &middot; view full scoreboard &rarr;</div>
+        <div class="card-date">Sent Sept 14, 2026</div>
       </a>
-      <a class="card" href="/tomii">
+      <div class="card-foot">
+        <a class="card-action" href="/skylinepropertyexperts">View scoreboard &rarr;</a>
+        <a class="card-action pdf" href="/assets/pdfs/skylinepropertyexperts.pdf" target="_blank" rel="noopener">Findings PDF &darr;</a>
+      </div>
+      </div>
+      <div class="card">
+      <a class="card-hit" href="/tomii">
         <div class="card-top">
           <div>
             <div class="card-name">TOMii Healing &amp; Wellness</div>
@@ -222,8 +259,13 @@ h1 em{ font-style:normal; color:var(--accent-lt); }
           </div>
         </div>
         
-        <div class="card-foot">Built date on file &middot; view full scoreboard &rarr;</div>
+        <div class="card-date">Built date on file</div>
       </a>
+      <div class="card-foot">
+        <a class="card-action" href="/tomii">View scoreboard &rarr;</a>
+        <span class="card-action muted-action">PDF not built yet</span>
+      </div>
+      </div>
   </div>
 
   <div class="note">Internal tool &mdash; not linked from the public site. Add a new card here every time a scoreboard ships.</div>
