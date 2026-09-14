@@ -1764,13 +1764,39 @@ const brandedQueries = (brand) => {
   return [`Tell me about ${b}`, `Is ${b} any good`, `${b} reviews`, `What do people say about ${b}`, `Should I choose ${b}`];
 };
 
+// "Can AI reach you?" — step one of the report. Cheap, structured signals: is a crawler
+// blocked in robots.txt, does the site actually serve real content to GPTBot, is there a
+// sitemap (how AI bots really discover pages). This is upstream of citation: if bots can't
+// crawl you, nothing else matters.
+const scoreboardReach = async (site) => {
+  const [robots, homeAsBot, sitemap] = await Promise.all([
+    fetchWithTimeout(site.origin + "/robots.txt", {}, 8000),
+    fetchWithTimeout(site.url, { headers: { "User-Agent": BOT_UAS.GPTBot } }, 12000),
+    fetchWithTimeout(site.origin + "/sitemap.xml", {}, 8000),
+  ]);
+  const robotsText = robots.text || "";
+  const bots = ["GPTBot", "ClaudeBot", "PerplexityBot", "CCBot", "Google-Extended"];
+  const blockedBots = bots.filter((b) => {
+    const blk = robotsText.match(new RegExp("user-agent:\\s*" + b.replace(/[-]/g, "\\$&") + "[\\s\\S]*?(?=user-agent:|$)", "i"));
+    return blk && /disallow:\s*\/\s*(\n|$)/i.test(blk[0]);
+  });
+  const starBlocked = /user-agent:\s*\*[\s\S]*?disallow:\s*\/\s*(\n|$)/i.test(robotsText);
+  const gptbotServed = !!homeAsBot.ok && (homeAsBot.text || "").length > 400;
+  const hasSitemap = !!sitemap.ok && /<urlset|<sitemapindex/i.test(sitemap.text || "");
+  const canReach = !starBlocked && blockedBots.length === 0 && gptbotServed;
+  return { starBlocked, blockedBots, gptbotServed, hasSitemap, canReach };
+};
+
 // Website mode: credit the domain when it is cited, name-match the real business name too,
 // and build the category seed from what the site actually says it does (service, not the
 // nonexistent `category` field that silently left the seed location-only).
 const runScoreboardScan = async (domain, seedIn, n = 40) => {
   const site = normalizeUrl(domain);
   const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
-  const profile = await siteProfile(site).catch(() => null);
+  const [profile, reach] = await Promise.all([
+    siteProfile(site).catch(() => null),
+    scoreboardReach(site).catch(() => null),
+  ]);
   let seed = (seedIn || "").trim();
   if (!seed) {
     seed = (profile && profile.service)
@@ -1783,7 +1809,9 @@ const runScoreboardScan = async (domain, seedIn, n = 40) => {
   const variants = [...new Set([...brandVariants(bare), ...titleNames])];
   const root = bare.split(".")[0];
   const brandName = titleNames[0] || (root.charAt(0).toUpperCase() + root.slice(1));
-  return scoreboardCore({ label: bare, variants, citeHost: bare, seed, queries, branded: brandedQueries(brandName) });
+  const out = await scoreboardCore({ label: bare, variants, citeHost: bare, seed, queries, branded: brandedQueries(brandName) });
+  if (out && !out.error) out.reach = reach;
+  return out;
 };
 
 // Name mode: for a person/business with no website. A "win" is AI naming them in its answer.

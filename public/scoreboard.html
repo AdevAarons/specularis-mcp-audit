@@ -92,6 +92,19 @@
   .smart .cta a{ font-size:14px; font-weight:800; color:#fff; background:var(--blue); border-radius:40px; padding:11px 22px; text-decoration:none; white-space:nowrap; }
   #err{ color:#b93a2e; font-weight:600; padding:20px 0; }
 
+  .steplabel{ font-size:11.5px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--blue); margin:0 0 12px; }
+  .reach{ margin:22px 0 8px; padding:22px 24px; background:var(--wash); border:1px solid #dce6fb; border-radius:16px; }
+  .reach .items{ display:flex; flex-wrap:wrap; gap:14px 30px; }
+  .ritem{ display:flex; align-items:flex-start; gap:10px; min-width:200px; flex:1; }
+  .ritem .dot{ width:20px; height:20px; border-radius:50%; flex-shrink:0; margin-top:1px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#fff; }
+  .ritem.ok .dot{ background:#1f9d5b; } .ritem.bad .dot{ background:#d9483b; } .ritem.warn .dot{ background:#e0a43b; }
+  .ritem .rcol{ display:flex; flex-direction:column; }
+  .ritem .rt{ font-size:14.5px; font-weight:700; color:var(--ink); line-height:1.3; }
+  .ritem .rs{ font-size:13px; color:var(--sec); margin-top:1px; }
+  .reach .verdict{ margin-top:16px; padding-top:14px; border-top:1px solid #dce6fb; font-size:14.5px; font-weight:600; color:var(--ink); }
+  .reach .verdict.bad{ color:#b23a2c; }
+  .citehead{ font-weight:900; font-size:26px; line-height:1.12; letter-spacing:-.025em; color:var(--ink); margin:28px 0 4px; }
+
   #start{ max-width:520px; margin:6vh auto 0; background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%); border:1px solid var(--line); border-radius:20px; padding:40px 40px 36px; }
   #start .eyebrow{ margin-bottom:14px; display:block; }
   #start h1{ font-size:28px; font-weight:900; letter-spacing:-.025em; margin:0 0 8px; }
@@ -155,9 +168,14 @@
   </div>
 
   <div id="card" hidden>
-    <div class="top"><span class="eyebrow">AI Citation Scoreboard</span><span class="tag" id="tag">Illustrative</span></div>
+    <div class="top"><span class="eyebrow">AI Visibility Report</span><span class="tag" id="tag">Illustrative</span></div>
     <h1 id="h1">&nbsp;</h1>
     <div class="sub" id="sub"></div>
+
+    <div class="reach" id="reach" style="display:none"></div>
+
+    <div class="steplabel" id="citestep" style="display:none">Step 2 · Does AI cite you?</div>
+    <div class="citehead" id="citehead"></div>
     <div class="cardrow">
       <div class="big">
         <div class="n"><span id="x">–</span><span class="d">/<span id="n">–</span></span></div>
@@ -188,6 +206,7 @@
 
   var STEMS=["who are the best real estate agents","top real estate agent near me","best agent for first-time buyers","how do I choose a real estate agent","what to look for in a realtor","best agent for luxury homes","agent for relocating families","is it worth hiring a realtor","compare real estate agents in the area","best agent for selling quickly","top realtors 2026","best agent for condos","best agent for investment properties","realtor for downsizing","agent for military families","best agent for new construction","realtor who speaks Spanish","best agent for waterfront homes","agent for first-time sellers","best low-commission agent","realtor for probate sales","best agent for fixer-uppers","agent for out-of-state buyers","best luxury real estate agent","realtor for 55+ communities","best agent for short sales","agent for vacation-rental investors","top-rated realtor reviews","best agent for negotiating price","realtor for townhomes","best agent for a fast closing","agent for divorce home sales","best realtor for buyers","best realtor for sellers","agent for historic homes","realtor for a specific school district","best agent for cash buyers","best agent for a starter home","realtor for eco-friendly homes","who is the best realtor for me"];
   var DEMO={ host:"your-business.com", host2:"a competing brokerage", engines:["Perplexity","Claude","Gemini","ChatGPT"], branded:{total:5, cited:4},
+    reach:{ starBlocked:false, blockedBots:["GPTBot"], gptbotServed:true, hasSitemap:true, canReach:false },
     runs: STEMS.map(function(q,i){ return { query:q, owned:i<27 }; }),
     rival:{ host:"a competing brokerage", citedIn:18, ofQueries:40 },
     openings:[ {host:"expertise.com", m:"cited in 22 of 40 answers · you’re not in it"},
@@ -199,15 +218,42 @@
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
+  function renderReach(reach){
+    var el=document.getElementById('reach');
+    if(!reach){ el.style.display='none'; return; }
+    el.style.display='block';
+    var access;
+    if(reach.starBlocked) access={cls:'bad', t:'Crawlers blocked', s:'robots.txt disallows all bots'};
+    else if((reach.blockedBots||[]).length) access={cls:'bad', t:'Blocking '+reach.blockedBots.join(', '), s:'these AI crawlers are turned away'};
+    else access={cls:'ok', t:'Open to AI crawlers', s:'no robots.txt blocks'};
+    var g = reach.gptbotServed ? {cls:'ok', t:'GPTBot reads your site', s:'it gets your real page content'} : {cls:'bad', t:'GPTBot gets nothing', s:'no readable content served to the bot'};
+    var sm = reach.hasSitemap ? {cls:'ok', t:'Sitemap found', s:'how AI discovers your pages'} : {cls:'warn', t:'No sitemap', s:'AI finds pages by luck, not a list'};
+    var icon=function(cls){ return cls==='ok'?'✓':(cls==='warn'?'!':'✕'); };
+    var item=function(o){ return '<div class="ritem '+o.cls+'"><span class="dot">'+icon(o.cls)+'</span><span class="rcol"><span class="rt">'+esc(o.t)+'</span><span class="rs">'+esc(o.s)+'</span></span></div>'; };
+    var verdict = reach.canReach
+      ? {cls:'', t:'AI can reach you. The real question is whether it recommends you — see below.'}
+      : {cls:'bad', t:'AI can’t fully reach you. Fix this first; nothing below improves until it can.'};
+    el.innerHTML='<div class="steplabel">Step 1 · Can AI reach you?</div>'+
+      '<div class="items">'+item(access)+item(g)+item(sm)+'</div>'+
+      '<div class="verdict '+verdict.cls+'">'+esc(verdict.t)+'</div>';
+  }
+
   function render(m){
     lastHost=m.host||'';
     var total=m.total!=null?m.total:(m.runs||[]).length;
     var cited=m.cited!=null?m.cited:(m.runs||[]).filter(function(r){return r.owned;}).length;
     document.getElementById('tag').textContent = demo?'Illustrative':'Live result';
-    document.getElementById('h1').textContent = 'Cited in '+cited+' of the '+total+' questions AI gets asked in this category';
+    document.getElementById('h1').textContent = 'How AI sees '+(demo?'your business':m.host);
     document.getElementById('sub').textContent = demo
-      ? 'Across the key questions customers ask AI, here is what this business wins, what it is missing, and how it stacks up against its top competitor.'
-      : 'For '+m.host+', across the key questions customers ask AI about '+(m.seed||'this category')+'.';
+      ? 'Whether AI can reach you, whether it recommends you, and where you win first — measured across the key questions your customers ask.'
+      : 'Whether AI can reach '+m.host+', whether it recommends you across '+(m.seed||'this category')+', and where you win first.';
+
+    // Step 1 — Can AI reach you?
+    renderReach(m.reach);
+
+    // Step 2 — Does AI cite you?
+    document.getElementById('citestep').style.display = m.reach ? '' : 'none';
+    document.getElementById('citehead').textContent = 'Cited in '+cited+' of the '+total+' questions AI gets asked in this category';
     var eng=(m.engines||[]);
     if(eng.length){ var el=eng.length>1?eng.slice(0,-1).join(', ')+' & '+eng[eng.length-1]:eng[0];
       document.getElementById('foot-note').innerHTML='Scanned across '+esc(el)+' · Specularis'; }
@@ -252,6 +298,11 @@
       '<div class="col"><h2>Missing '+missing.length+' &middot; your next targets</h2>'+
         (missing.length?missing.map(function(r){return '<div class="q miss"><span class="ic">×</span><span class="txt">'+esc(r.query)+'</span></div>';}).join(''):'<div class="q"><span class="txt" style="color:#8a93a3">You appear in every question we tested.</span></div>')+'</div>';
     det.appendChild(c);
+
+    if(((m.openings||[]).length || (m.smartRecs||[]).length) && m.reach){
+      var s3=document.createElement('div'); s3.className='steplabel'; s3.style.marginTop='26px';
+      s3.textContent='Step 3 · Where you win first'; det.appendChild(s3);
+    }
 
     if((m.openings||[]).length){
       var op=document.createElement('div'); op.className='open';
