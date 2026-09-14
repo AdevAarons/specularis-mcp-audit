@@ -2375,16 +2375,16 @@ const quickWins = (s, cd) => {
   else if (!s.hasAddress) add("today", "Add a postal address to the Organization schema",
     "The schema exists but does not say where this business operates.", 3, "entity");
   if (!s.llmsPresent) add("today", "Publish /llms.txt",
-    "A short file telling engines what you do and which pages matter. Fifteen minutes.", 2, "technical");
+    "A short file pointing engines to your key pages. Fifteen minutes to add, but most AI crawlers currently ignore it, so treat it as a tidy-up, not a lever. Your sitemap does the real work of getting pages crawled.", 2, "technical");
   else if (!s.llmsUseful) add("today", "Fill in /llms.txt - it exists but is effectively empty",
-    "The file is being served but carries nothing an engine can use.", 1, "technical");
+    "The file is being served but carries nothing an engine can use. Low priority: most AI crawlers barely touch it today.", 1, "technical");
   if (!s.hasMetaDesc) add("today", "Add a meta description to the homepage",
     "Engines frequently quote it verbatim when summarising a business.", 2, "technical");
   if (!s.hasTitle) add("today", "Add a page title", "There is no title tag to name you with.", 1, "technical");
   if (!s.hasCanonical) add("today", "Add a canonical tag",
     "Without one, duplicate URLs split whatever authority you have.", 1, "technical");
   if (!s.hasSitemap) add("today", "Publish a sitemap.xml",
-    "Crawlers are finding pages by luck rather than by list.", 2, "technical");
+    "This is how AI crawlers actually discover your pages, far more than llms.txt does. Without it, bots find pages by luck instead of from a list. Higher impact than it looks.", 3, "technical");
 
   if (cd && cd.targets && cd.targets.length) {
     const top = cd.targets.slice(0, 3);
