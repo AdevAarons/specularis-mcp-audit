@@ -1172,7 +1172,9 @@ const callPerplexity = async (query) => {
 const callClaude = async (query) => {
   if (!ANTHROPIC_API_KEY) return null;
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 45000);
+  // 80s, not 45s: a web-search call measured 28-59s in direct tests (2026-10-02), and the
+  // old 45s abort silently dropped Claude from ~70% of citation-finder results.
+  const t = setTimeout(() => ctrl.abort(), 80000);
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", signal: ctrl.signal,
@@ -1186,7 +1188,7 @@ const callClaude = async (query) => {
         // it runs on every scan. Opus here was roughly five times the cost for no
         // gain in what we actually use, which is the list of cited sources.
         model: "claude-sonnet-5",
-        max_tokens: 1024,
+        max_tokens: 2048, // 1024 truncated one of three direct test answers (stop_reason=max_tokens)
         messages: [{ role: "user", content: query }],
         // max_uses:1, not 3 — web searches are billed per search (~1c each) regardless
         // of model, and 40 queries x 3 searches was the single biggest cost per scan.
