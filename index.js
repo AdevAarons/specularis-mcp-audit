@@ -62,6 +62,8 @@ let SAVAGE_FLIGHT_HTML = "";
 try { SAVAGE_FLIGHT_HTML = readFileSync(join(__dirname, "public", "savage-flight.html"), "utf8"); } catch (e) {}
 let PAVILION_HTML = "";
 try { PAVILION_HTML = readFileSync(join(__dirname, "public", "pavilion-construction.html"), "utf8"); } catch (e) {}
+let H2O_HTML = "";
+try { H2O_HTML = readFileSync(join(__dirname, "public", "h2o-international.html"), "utf8"); } catch (e) {}
 let CATMAN_HTML = "";
 try { CATMAN_HTML = readFileSync(join(__dirname, "public", "catman.html"), "utf8"); } catch (e) {}
 let OMEGA_HTML = "";
@@ -2090,6 +2092,12 @@ app.get("/pavilion-construction", (_req, res) => {
 app.get("/catman", (_req, res) => {
   if (!CATMAN_HTML) return res.status(404).send("Not found");
   res.type("html").send(CATMAN_HTML);
+});
+
+// Client scoreboard — H2O International (H2O In Home)
+app.get("/h2o-international", (_req, res) => {
+  if (!H2O_HTML) return res.status(404).send("Not found");
+  res.type("html").send(H2O_HTML);
 });
 
 app.get("/omega-property", (_req, res) => {
