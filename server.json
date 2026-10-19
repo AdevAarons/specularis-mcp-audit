@@ -2,13 +2,13 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.AdevAarons/specularis-mcp-audit",
   "title": "Specularis AI Visibility Audit",
-  "description": "Free AI visibility (GEO/AEO) audit: can ChatGPT, Claude and Perplexity find and cite your website?",
+  "description": "Free AI visibility (GEO/AEO) audit: can ChatGPT, Claude, Perplexity and Gemini find and cite your website? Also returns the sources they cite instead.",
   "websiteUrl": "https://specularisinc.com/free-audit",
   "repository": {
     "url": "https://github.com/AdevAarons/specularis-mcp-audit",
     "source": "github"
   },
-  "version": "1.0.1",
+  "version": "2.9.0",
   "remotes": [
     {
       "type": "streamable-http",

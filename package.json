@@ -1,7 +1,7 @@
 {
   "name": "specularis-mcp-audit",
-  "version": "1.0.1",
-  "description": "Specularis AI Visibility (GEO/AEO) Audit — MCP server. Run a free AI visibility audit from inside Claude/ChatGPT.",
+  "version": "2.9.0",
+  "description": "Specularis AI Visibility (GEO/AEO) Audit — MCP server. Run a free AI visibility audit, and find the sources AI engines cite, from inside Claude/ChatGPT.",
   "license": "MIT",
   "author": "Specularis (Adev Aarons) <adev@specularisinc.com> (https://specularisinc.com)",
   "homepage": "https://specularisinc.com/free-audit",
