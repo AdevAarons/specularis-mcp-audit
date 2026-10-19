@@ -1477,7 +1477,61 @@ const mentionsBrand = (text, variants) => {
     new RegExp("\\b" + v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(t));
 };
 
-const runCitationFinder = async (query, domain) => {
+// ---- Founder-as-brand: personal identity matching ----
+// A person is not a domain. They are spread across LinkedIn, X, a bio page, maybe
+// Crunchbase, and none of those is uniquely theirs at the HOST level the way a
+// business's own domain is. The bug this section fixes, reported directly from a
+// call: checking a LinkedIn URL matched on "linkedin.com" alone, so it silently
+// credited a stranger's profile as "you" the moment any linkedin.com URL showed up
+// in the AI's sources. Two separate things had to be fixed, and they are fixed
+// separately below: (1) matching the exact profile PATH, not the shared host, and
+// (2) requiring the person's name to appear NEAR a disambiguating anchor (their
+// company, role, or city) before a bare name mention counts, since two people
+// sharing a name is far more common than two companies sharing one.
+
+// Strip protocol/www/trailing slash/query/hash so the same profile written three
+// different ways ("https://www.linkedin.com/in/x/", "linkedin.com/in/x?trk=...")
+// compares equal.
+const normalizeForMatch = (u) => {
+  try {
+    const p = new URL(/^https?:\/\//i.test(u) ? u : "https://" + u);
+    const path = p.pathname.replace(/\/+$/, "");
+    return (p.host.replace(/^www\./i, "") + path).toLowerCase();
+  } catch (e) { return String(u || "").toLowerCase().replace(/^https?:\/\/(www\.)?/i, "").replace(/\/+$/, ""); }
+};
+
+// A source counts as an owned personal URL only when it IS that profile page (or a
+// path beneath it), never merely the same platform. This is the exact-path check
+// that a bare host comparison (the old bug) skipped.
+const isOwnedUrl = (sourceUrl, ownedUrls) => {
+  const s = normalizeForMatch(sourceUrl);
+  if (!s) return false;
+  return (ownedUrls || []).some((u) => {
+    const o = normalizeForMatch(u);
+    return !!o && (s === o || s.startsWith(o + "/"));
+  });
+};
+
+const splitSentences = (text) => String(text || "").split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
+
+// True only when the person's name appears in a sentence that also carries (in the
+// same sentence or an immediate neighbor) at least one disambiguating anchor term —
+// their company, role, or another fact only the right person would be described
+// with. Without this, "Adev Aarons" matching anywhere in a long answer about someone
+// else with the same name would silently read as a hit.
+const personMentionedWithContext = (text, personVariants, contextTerms) => {
+  if (!personVariants?.length) return false;
+  const sentences = splitSentences(text);
+  for (let i = 0; i < sentences.length; i++) {
+    if (!mentionsBrand(sentences[i], personVariants)) continue;
+    if (!contextTerms?.length) return true; // no anchor supplied: fall back to a plain name match
+    const window = [sentences[i - 1], sentences[i], sentences[i + 1]].filter(Boolean).join(" ");
+    if (mentionsBrand(window, contextTerms)) return true;
+  }
+  return false;
+};
+
+const runCitationFinder = async (query, domain, person = null) => {
   const site = normalizeUrl(domain);
   const bare = site ? site.host.replace(/^www\./, "") : String(domain).toLowerCase().replace(/^www\./, "");
   const q = String(query).slice(0, 300);
@@ -1535,9 +1589,22 @@ const runCitationFinder = async (query, domain) => {
   }
   const sources = [...byHost.values()];
 
+  // Personal identity, if this run has one. `person.urls` are exact profile pages
+  // (LinkedIn, X, a bio page) — checked by path, not host, so a stranger's LinkedIn
+  // profile in the source list can never be mistaken for this person's own.
+  const personUrls = (person?.urls || []).filter(Boolean);
+  const hasPerson = !!(person?.name && personUrls.length);
+  const personVariants = hasPerson ? [person.name, ...(person.nameVariants || [])] : [];
+
   const variants = brandVariants(bare);
   await Promise.all(sources.map(async (s) => {
-    if (s.host === bare || s.host.endsWith("." + bare)) { s.isYou = true; s.appearsYou = true; return; }
+    if (s.host === bare || s.host.endsWith("." + bare)) { s.isYou = true; s.isYouVia = "business"; s.appearsYou = true; return; }
+    // Checked before the host-collapsed `sources` list, not instead of it, because a
+    // shared platform (linkedin.com) may have already deduped to a different
+    // profile's URL by the time we get here — see the raw-level check below, which
+    // is what actually drives citedVia/linkedCitation. This flag is for the visible
+    // source list only: if the URL Framer kept happens to be this person's own, say so.
+    if (hasPerson && isOwnedUrl(s.url, personUrls)) { s.isYou = true; s.isYouVia = "personal"; s.appearsYou = true; return; }
     const f = await fetchWithTimeout(s.url, {}, 8000);
     // A page we could not read is unknown, not a miss. Scoring a timeout as
     // "does not mention you" is the same false negative that once gave Zillow a 0.
@@ -1563,23 +1630,45 @@ const runCitationFinder = async (query, domain) => {
     ? (((gemini.candidates || [])[0]?.content?.parts) || []).filter((p) => p?.text).map((p) => p.text).join(" ") : "";
   const chatgptText = chatgpt && !chatgpt.error
     ? ((chatgpt.output || []).find((o) => o?.type === "message")?.content || []).filter((c) => c?.type === "output_text").map((c) => c.text).join(" ") : "";
-  const namedInAnswer = mentionsBrand([answer, claudeText, geminiText, chatgptText].join(" "), variants);
+  const fullAnswerText = [answer, claudeText, geminiText, chatgptText].join(" ");
+  const namedInAnswerBusiness = mentionsBrand(fullAnswerText, variants);
+  // The company name almost never collides with a stranger, so it is checked as a
+  // plain mention like before. A person's name collides constantly, which is the bug
+  // reported from the call — so a personal mention only counts when the name shows
+  // up near a disambiguating anchor (their company, by default), not on its own.
+  const namedInAnswerPersonal = hasPerson
+    ? personMentionedWithContext(fullAnswerText, personVariants, person.context?.length ? person.context : variants)
+    : false;
+  const namedInAnswer = namedInAnswerBusiness || namedInAnswerPersonal;
 
   // ---- Cited vs mentioned ----
   // This is the distinction that actually matters to a buyer: being described in an
   // AI answer with nothing to click is not the same as being the linked source. A
   // "mention" earns nothing measurable. A "citation" is a page someone can land on.
-  // youSource.kind is only "citation" grade when an engine actually cited that page
-  // in the text it wrote, not merely retrieved it while searching (see
+  // A source's `kind` is only "citation" grade when an engine actually cited that
+  // page in the text it wrote, not merely retrieved it while searching (see
   // extractClaudeSources). Perplexity sources are always citation-grade by
   // construction, so a Perplexity hit alone is enough to count as cited.
-  const youSource = sources.find(s => s.isYou);
-  const linkedCitation = !!youSource && youSource.kind === "citation";
+  const youSourceBusiness = sources.find(s => s.isYouVia === "business");
+  const linkedCitationBusiness = !!youSourceBusiness && youSourceBusiness.kind === "citation";
+  // Checked against `raw`, not `sources`: sources are deduped one-entry-per-host, so
+  // if a stranger's linkedin.com URL happened to dedupe first, this person's own
+  // profile URL could be sitting in `raw` without ever reaching the visible list.
+  // Scoring off `raw` means the result is correct even when the display list (fixed
+  // above for the common case) still shows the wrong row for an edge case.
+  const linkedCitationPersonal = hasPerson
+    && raw.some(c => c.kind === "citation" && isOwnedUrl(c.url, personUrls));
+  const linkedCitation = linkedCitationBusiness || linkedCitationPersonal;
+  const citedVia = linkedCitationPersonal ? "personal" : (linkedCitationBusiness ? "business" : null);
   const proseMention = namedInAnswer && !linkedCitation;
+  const mentionedVia = !proseMention ? null
+    : (namedInAnswerPersonal && !namedInAnswerBusiness ? "personal"
+       : (namedInAnswerBusiness && !namedInAnswerPersonal ? "business" : "both"));
   const status = linkedCitation ? "cited" : (proseMention ? "mentioned" : "absent");
 
   return { query: q, domain: bare, answer: answer.slice(0, 1200), total, inCount,
-    unknownCount, namedInAnswer, status, linkedCitation, proseMention,
+    unknownCount, namedInAnswer, status, linkedCitation, proseMention, citedVia, mentionedVia,
+    personChecked: hasPerson,
     engines: enginesUsed, sources };
 };
 
@@ -2276,7 +2365,7 @@ app.post("/opportunity-finder", async (req, res) => {
 // AI Citation Source Finder — core endpoint. POST { query, domain } -> real cited sources + presence.
 app.post("/citation-finder", async (req, res) => {
   try {
-    const { query, domain, email } = req.body || {};
+    const { query, domain, email, personName, personUrls, personContext, personNameVariants } = req.body || {};
     if (!query || !domain) return res.status(400).json({ error: "query and domain are required" });
     const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
     // The public limit exists so strangers cannot burn the Perplexity budget. An
@@ -2288,16 +2377,40 @@ app.post("/citation-finder", async (req, res) => {
     if (!PERPLEXITY_API_KEY && !ANTHROPIC_API_KEY) return res.status(503).json({ error: "PERPLEXITY_API_KEY not set on the server" });
     if (email) console.log("CITATION-FINDER LEAD:", JSON.stringify({ email, domain, query, at: new Date().toISOString() }));
 
-    const r = await runCitationFinder(query, domain);
+    // Founder-as-brand: present only when the caller supplied a name plus at least
+    // one profile URL. `personUrls` arrives as an array from the multi-URL form
+    // field; a bare string is tolerated too since a single LinkedIn field is the
+    // common case.
+    const urls = Array.isArray(personUrls) ? personUrls : (personUrls ? [personUrls] : []);
+    const variantsIn = Array.isArray(personNameVariants) ? personNameVariants : (personNameVariants ? [personNameVariants] : []);
+    const person = (personName && urls.filter(Boolean).length)
+      ? { name: String(personName).slice(0, 120), urls: urls.filter(Boolean).slice(0, 5),
+          // Free-text disambiguation terms (e.g. "founder of Specularis, Miami") take
+          // priority over the domain-derived business variants — the person filling
+          // this in knows what actually distinguishes them from a same-named
+          // stranger better than a guess from their domain string can.
+          context: Array.isArray(personContext) ? personContext.filter(Boolean).slice(0, 5) : [],
+          // Nicknames/alternate spellings AI might say instead of the exact full
+          // name ("Adev" instead of "Adev Aarons"), so a real mention doesn't get
+          // missed just because it wasn't spelled the one way we asked for.
+          nameVariants: variantsIn.filter(Boolean).slice(0, 5) }
+      : null;
+
+    const r = await runCitationFinder(query, domain, person);
     if (r.error) return res.status(502).json({ error: r.error });
     if (email) logLeadToNotion({ email, domain: r.domain, query: r.query, inCount: r.inCount, total: r.total }); // fire-and-forget
     // status/linkedCitation/proseMention are the whole point of this endpoint: whether
     // the domain is a clickable source (cited), just named with no link (mentioned),
     // or not in the answer at all (absent). Dropping them here is how a real
     // cited/mentioned split silently turned back into a single yes/no on the frontend.
+    // citedVia/mentionedVia/personChecked exist so a founder-as-brand run can say
+    // WHICH identity earned the result — "cited via LinkedIn" reads very differently
+    // to the person than "cited via specularisinc.com" — instead of collapsing both
+    // into one undifferentiated yes.
     res.json({ query: r.query, domain: r.domain, answer: r.answer, total: r.total, inCount: r.inCount,
       unknownCount: r.unknownCount, namedInAnswer: r.namedInAnswer, status: r.status,
       linkedCitation: r.linkedCitation, proseMention: r.proseMention,
+      citedVia: r.citedVia, mentionedVia: r.mentionedVia, personChecked: r.personChecked,
       engines: r.engines, sources: r.sources });
   } catch (e) {
     res.status(500).json({ error: "internal error" });

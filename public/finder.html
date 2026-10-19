@@ -40,9 +40,14 @@
   .field{ margin-bottom:18px; }
   label{ display:block; font-size:14px; font-weight:700; color:var(--ink); margin-bottom:8px; }
   label .hint{ font-weight:400; color:var(--muted); font-size:13px; }
-  input{ width:100%; font-family:inherit; font-size:16px; color:var(--ink); padding:14px 16px; border:1.5px solid var(--line-dk); border-radius:12px; background:#fff; transition:border-color .15s, box-shadow .15s; }
+  input, select{ width:100%; font-family:inherit; font-size:16px; color:var(--ink); padding:14px 16px; border:1.5px solid var(--line-dk); border-radius:12px; background:#fff; transition:border-color .15s, box-shadow .15s; }
+  select{ appearance:none; -webkit-appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23999'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; padding-right:38px; }
   input::placeholder{ color:var(--faint); }
-  input:focus{ outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(36,103,227,.12); }
+  input:focus, select:focus{ outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(36,103,227,.12); }
+  /* founder-as-brand fields stay in the DOM (so their values survive a mode toggle)
+     but collapse out of flow when business mode is active. */
+  .field.founder-only{ display:none; }
+  .field.founder-only.on{ display:block; }
   button{ width:100%; margin-top:8px; background:var(--blue); color:#fff; border:0; border-radius:40px; padding:16px; font-family:inherit; font-size:16px; font-weight:700; cursor:pointer; transition:background .15s, transform .05s; }
   button:hover{ background:var(--blue-dk); } button:active{ transform:translateY(1px); } button:disabled{ opacity:.55; cursor:default; }
   .micro{ text-align:center; color:var(--muted); font-size:12.5px; margin-top:14px; }
@@ -128,12 +133,39 @@
 
   <form id="form">
     <div class="field">
+      <label>Checking for <span class="hint">— a business, or a founder's own name alongside it</span></label>
+      <select id="mode">
+        <option value="business">A business</option>
+        <option value="founder">A founder / personal brand (checks the business too)</option>
+      </select>
+    </div>
+    <div class="field">
       <label>The question your customers ask AI <span class="hint">— be specific</span></label>
       <input id="query" type="text" placeholder="e.g. best real estate agent in Tampa, FL" required>
     </div>
     <div class="field">
       <label>Your website</label>
       <input id="domain" type="text" placeholder="your-business.com" required>
+    </div>
+    <div class="field founder-only" id="f-name-field">
+      <label>Full name <span class="hint">— exactly how you'd expect AI to say it</span></label>
+      <input id="p-name" type="text" placeholder="e.g. Adev Aarons">
+    </div>
+    <div class="field founder-only" id="f-variants-field">
+      <label>Also goes by <span class="hint">— nicknames or spellings AI might use, comma-separated, optional</span></label>
+      <input id="p-variants" type="text" placeholder="e.g. Adev, A. Aarons">
+    </div>
+    <div class="field founder-only" id="f-linkedin-field">
+      <label>LinkedIn profile URL <span class="hint">— the one page only you own</span></label>
+      <input id="p-linkedin" type="text" placeholder="linkedin.com/in/yourname">
+    </div>
+    <div class="field founder-only" id="f-other-field">
+      <label>Another profile <span class="hint">— X/Twitter or a bio page, optional</span></label>
+      <input id="p-other" type="text" placeholder="x.com/yourname">
+    </div>
+    <div class="field founder-only" id="f-context-field">
+      <label>What makes you unmistakable <span class="hint">— your role, company, or city, comma-separated</span></label>
+      <input id="p-context" type="text" placeholder="e.g. founder of Specularis, AI visibility, Miami">
     </div>
     <div class="field">
       <label>Where should we send your full report?</label>
@@ -174,13 +206,45 @@
 <script>
   var form=document.getElementById('form'), loading=document.getElementById('loading'), error=document.getElementById('error'), results=document.getElementById('results');
   function show(el){ [form,loading,error,results].forEach(function(x){ x.style.display='none'; }); el.style.display='block'; }
+
+  // Founder mode reveals Full Name + LinkedIn as required, and makes them part of
+  // the check alongside the business — not a replacement for it, per how this mode
+  // is meant to work: both identities are checked together, either one earning a
+  // citation counts.
+  var modeSel=document.getElementById('mode'), nameField=document.getElementById('f-name-field'),
+      variantsField=document.getElementById('f-variants-field'), liField=document.getElementById('f-linkedin-field'),
+      otherField=document.getElementById('f-other-field'), contextField=document.getElementById('f-context-field'),
+      pName=document.getElementById('p-name'), pLinkedin=document.getElementById('p-linkedin');
+  function applyMode(){
+    var founder = modeSel.value==='founder';
+    [nameField,variantsField,liField,otherField,contextField].forEach(function(f){ f.classList.toggle('on', founder); });
+    pName.required = founder; pLinkedin.required = founder;
+  }
+  modeSel.addEventListener('change', applyMode);
+  applyMode();
+
+  // Comma-separated free text -> a clean array: split, trim, drop empties. Used for
+  // both "also goes by" and the disambiguation phrase, since both are the same shape.
+  function splitList(v){ return String(v||'').split(',').map(function(x){return x.trim();}).filter(Boolean); }
+
   form.addEventListener('submit', async function(e){
     e.preventDefault();
     var query=document.getElementById('query').value.trim(), domain=document.getElementById('domain').value.trim(), email=document.getElementById('email').value.trim();
+    var founder = modeSel.value==='founder';
+    var personName=pName.value.trim(), personLinkedin=pLinkedin.value.trim(), personOther=document.getElementById('p-other').value.trim();
+    var personVariants=splitList(document.getElementById('p-variants').value), personContext=splitList(document.getElementById('p-context').value);
     if(!query||!domain||!email) return;
+    if(founder && (!personName||!personLinkedin)) return;
     show(loading);
     try{
-      var res=await fetch('/citation-finder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:query,domain:domain,email:email})});
+      var payload={query:query,domain:domain,email:email};
+      if(founder){
+        payload.personName=personName;
+        payload.personUrls=[personLinkedin].concat(personOther?[personOther]:[]);
+        if(personVariants.length) payload.personNameVariants=personVariants;
+        if(personContext.length) payload.personContext=personContext;
+      }
+      var res=await fetch('/citation-finder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       var data=await res.json();
       if(!res.ok||data.error){
         if(data.error==='PERPLEXITY_API_KEY not set on the server') error.textContent='The tool is being set up — check back shortly.';
@@ -193,20 +257,28 @@
   });
   function render(d){
     document.getElementById('r-query').textContent='“'+d.query+'”';
-    document.getElementById('r-biz').textContent='Checking for '+d.domain;
+    document.getElementById('r-biz').textContent='Checking for '+d.domain + (d.personChecked ? ' and your personal profiles' : '');
     document.getElementById('r-gap').textContent=d.inCount+' / '+d.total;
     var statusEl=document.getElementById('r-status');
     var statusCopy={ cited:'Cited — you\'re a linked source', mentioned:'Mentioned, not cited — no link', absent:'Absent from this answer' };
     var statusCls={ cited:'chip-cited', mentioned:'chip-mentioned', absent:'chip-absent' };
     var st = d.status || (d.inCount>0 ? 'cited' : (d.namedInAnswer ? 'mentioned' : 'absent'));
-    statusEl.textContent = statusCopy[st] || '';
+    var text = statusCopy[st] || '';
+    // Founder mode checks two identities at once, so say WHICH one earned the
+    // result — "cited via your LinkedIn" reads very differently than "cited via
+    // yoursite.com", and collapsing that distinction is exactly what the tool used
+    // to get wrong.
+    var via = st==='cited' ? d.citedVia : (st==='mentioned' ? d.mentionedVia : null);
+    if(d.personChecked && via && via!=='both') text += ' (via ' + (via==='personal' ? 'your personal profile' : 'your business site') + ')';
+    statusEl.textContent = text;
     statusEl.className = 'chip ' + (statusCls[st] || '');
     var host=document.getElementById('r-sources'); host.innerHTML='';
     d.sources.forEach(function(s,i){
-      var div=document.createElement('div'); div.className='src';
-      var label = s.isYou ? "That's you" : (s.appearsYou ? "You're listed" : "Not listed");
+      var youLabel = s.isYouVia==='personal' ? "That's you (personal)" : (s.isYouVia==='business' ? "That's you" : "That's you");
+      var label = s.isYou ? youLabel : (s.appearsYou ? "You're listed" : "Not listed");
       var cls = s.appearsYou ? "st-yes" : "st-no";
       var engs = (s.engines||[]).map(function(e){ return '<span class="eng">'+e+'</span>'; }).join('');
+      var div=document.createElement('div'); div.className='src';
       div.innerHTML='<div class="rank">'+(i+1)+'</div><div class="body"><div class="name"><a href="'+s.url+'" target="_blank" rel="noopener">'+(s.title||s.host)+'</a></div><div class="type">'+s.type+' · '+s.host+'</div>'+(engs?'<div class="engs">'+engs+'</div>':'')+'</div><span class="status '+cls+'">'+label+'</span>';
       host.appendChild(div);
     });
