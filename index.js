@@ -64,6 +64,8 @@ let PAVILION_HTML = "";
 try { PAVILION_HTML = readFileSync(join(__dirname, "public", "pavilion-construction.html"), "utf8"); } catch (e) {}
 let H2O_HTML = "";
 try { H2O_HTML = readFileSync(join(__dirname, "public", "h2o-international.html"), "utf8"); } catch (e) {}
+let FXMEDUS_HTML = "";
+try { FXMEDUS_HTML = readFileSync(join(__dirname, "public", "fxmedus.html"), "utf8"); } catch (e) {}
 let CATMAN_HTML = "";
 try { CATMAN_HTML = readFileSync(join(__dirname, "public", "catman.html"), "utf8"); } catch (e) {}
 let OMEGA_HTML = "";
@@ -2189,6 +2191,12 @@ app.get("/catman", (_req, res) => {
 app.get("/h2o-international", (_req, res) => {
   if (!H2O_HTML) return res.status(404).send("Not found");
   res.type("html").send(H2O_HTML);
+});
+
+// Client scoreboard — FxMEDUS (Julian Borges, MD)
+app.get("/fxmedus", (_req, res) => {
+  if (!FXMEDUS_HTML) return res.status(404).send("Not found");
+  res.type("html").send(FXMEDUS_HTML);
 });
 
 app.get("/omega-property", (_req, res) => {
