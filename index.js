@@ -1268,7 +1268,9 @@ const extractGeminiSources = (data) => {
 const callChatGPT = async (query) => {
   if (!OPENAI_API_KEY) return null;
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 30000);
+  // 80s, not 30s: web-search calls on gpt-5-mini measured 17-43s in direct tests (2026-10-20),
+  // so the old 30s abort silently dropped ChatGPT from about half of citation-finder results.
+  const t = setTimeout(() => ctrl.abort(), 80000);
   try {
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST", signal: ctrl.signal,
