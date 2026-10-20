@@ -92,6 +92,7 @@ const CONTACT_URL = process.env.CONTACT_URL || "https://specularisinc.com/contac
 const AUDIT_URL = process.env.AUDIT_URL || "https://specularisinc.com/free-audit";
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || ""; // set in Railway Variables
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || ""; // set in Railway Variables — adds Claude as a 2nd engine in the citation finder
+const CLAUDE_TIMEOUT_MS = Number(process.env.CLAUDE_TIMEOUT_MS || 180000); // see callClaude: 80s was aborting real web-search calls
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ""; // set in Railway Variables — adds Gemini as a 3rd engine in the citation finder
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ""; // set in Railway Variables — adds ChatGPT as a 4th engine in the citation finder
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-mini"; // cheaper default; set OPENAI_MODEL=gpt-5.1 on Railway to revert instantly if a scan stops citing ChatGPT
@@ -1176,7 +1177,11 @@ const callClaude = async (query) => {
   const ctrl = new AbortController();
   // 80s, not 45s: a web-search call measured 28-59s in direct tests (2026-10-02), and the
   // old 45s abort silently dropped Claude from ~70% of citation-finder results.
-  const t = setTimeout(() => ctrl.abort(), 80000);
+  // 2026-10-20: 80s is still not enough. A direct call with this exact body ran past 120s
+  // without returning, which is why Claude keeps vanishing from `engines` on the heavier
+  // agency-ranking queries. Raised to 180s and made tunable, so the next time this moves
+  // it is a Railway variable rather than a redeploy.
+  const t = setTimeout(() => ctrl.abort(), CLAUDE_TIMEOUT_MS);
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", signal: ctrl.signal,
