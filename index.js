@@ -66,6 +66,10 @@ let H2O_HTML = "";
 try { H2O_HTML = readFileSync(join(__dirname, "public", "h2o-international.html"), "utf8"); } catch (e) {}
 let FXMEDUS_HTML = "";
 try { FXMEDUS_HTML = readFileSync(join(__dirname, "public", "fxmedus.html"), "utf8"); } catch (e) {}
+let RFL_HTML = "";
+try { RFL_HTML = readFileSync(join(__dirname, "public", "roaring-fork-landscapes.html"), "utf8"); } catch (e) {}
+let TNP_HTML = "";
+try { TNP_HTML = readFileSync(join(__dirname, "public", "top-notch-plumbing.html"), "utf8"); } catch (e) {}
 let CATMAN_HTML = "";
 try { CATMAN_HTML = readFileSync(join(__dirname, "public", "catman.html"), "utf8"); } catch (e) {}
 let OMEGA_HTML = "";
@@ -2204,6 +2208,18 @@ app.get("/h2o-international", (_req, res) => {
 app.get("/fxmedus", (_req, res) => {
   if (!FXMEDUS_HTML) return res.status(404).send("Not found");
   res.type("html").send(FXMEDUS_HTML);
+});
+
+// Client scoreboard — Roaring Fork Landscapes (Tom Friel)
+app.get("/roaring-fork-landscapes", (_req, res) => {
+  if (!RFL_HTML) return res.status(404).send("Not found");
+  res.type("html").send(RFL_HTML);
+});
+
+// Client scoreboard — Top-Notch Plumbing, Heating & Air (Adrian Vigil)
+app.get("/top-notch-plumbing", (_req, res) => {
+  if (!TNP_HTML) return res.status(404).send("Not found");
+  res.type("html").send(TNP_HTML);
 });
 
 app.get("/omega-property", (_req, res) => {
